@@ -155,7 +155,7 @@ class WebServer {
                 return res.status(401).json({ error: 'Vui lòng đăng nhập Discord để sử dụng!', loggedIn: false });
             }
 
-            if (!bot.client.isReady()) {
+            if (!bot.client || !bot.client.isReady()) {
                 return res.json({ guilds: [] });
             }
 
@@ -170,33 +170,52 @@ class WebServer {
                 name: g.name,
                 icon: g.iconURL() || 'https://cdn.discordapp.com/embed/avatars/0.png',
                 memberCount: g.memberCount,
-                hasActivePlayer: !!musicManager.getPlayer(g.id)
+                hasActivePlayer: musicManager.getPlayersForGuild(g.id).length > 0,
+                activePlayerCount: musicManager.getPlayersForGuild(g.id).length
             }));
 
-            res.json({ guilds });
+            res.json({ guilds, botPoolCount: bot.clients.length });
         });
 
         this.app.get('/api/guilds/:id', (req, res) => {
             const guildId = req.params.id;
-            const guild = bot.client.guilds.cache.get(guildId);
+            const guild = bot.client ? bot.client.guilds.cache.get(guildId) : null;
             if (!guild) {
                 return res.status(404).json({ error: 'Bot không tham gia Server này!' });
             }
 
             const voiceChannels = guild.channels.cache
                 .filter(c => c.isVoiceBased())
-                .map(c => ({
-                    id: c.id,
-                    name: c.name,
-                    membersCount: c.members.size,
-                    members: c.members.map(m => ({
-                        id: m.id,
-                        username: m.user.username,
-                        avatar: m.user.avatarURL() || 'https://cdn.discordapp.com/embed/avatars/0.png'
-                    }))
-                }));
+                .map(c => {
+                    const chPlayer = musicManager.getPlayerByVoice(guildId, c.id);
+                    return {
+                        id: c.id,
+                        name: c.name,
+                        membersCount: c.members.size,
+                        members: c.members.map(m => ({
+                            id: m.id,
+                            username: m.user.username,
+                            avatar: m.user.avatarURL() || 'https://cdn.discordapp.com/embed/avatars/0.png'
+                        })),
+                        activePlayer: chPlayer ? {
+                            bot: chPlayer.toJSON().bot,
+                            currentTrack: chPlayer.currentTrack,
+                            isPaused: chPlayer.isPaused
+                        } : null
+                    };
+                });
 
-            const player = musicManager.getPlayer(guildId);
+            // Find player based on user's current voice channel if present
+            const userId = req.session.user?.id;
+            let userVoiceId = null;
+            if (userId && userId !== 'dashboard') {
+                const vs = guild.voiceStates.cache.get(userId);
+                if (vs && vs.channelId) userVoiceId = vs.channelId;
+            }
+
+            const player = musicManager.getPlayer(guildId, userVoiceId);
+            const activePlayers = musicManager.getPlayersForGuild(guildId).map(p => p.toJSON());
+
             res.json({
                 guild: {
                     id: guild.id,
@@ -204,7 +223,9 @@ class WebServer {
                     icon: guild.iconURL() || 'https://cdn.discordapp.com/embed/avatars/0.png'
                 },
                 voiceChannels,
-                player: player ? player.toJSON() : { guildId, currentTrack: null, queue: [] }
+                player: player ? player.toJSON() : { guildId, currentTrack: null, queue: [] },
+                activePlayers,
+                botCount: bot.clients.length
             });
         });
 
@@ -224,7 +245,7 @@ class WebServer {
         this.app.post('/api/guilds/:id/join', async (req, res) => {
             const guildId = req.params.id;
             const { voiceChannelId } = req.body;
-            const guild = bot.client.guilds.cache.get(guildId);
+            const guild = bot.client ? bot.client.guilds.cache.get(guildId) : null;
             if (!guild) return res.status(404).json({ error: 'Server không tìm thấy!' });
 
             const channel = guild.channels.cache.get(voiceChannelId);
@@ -232,15 +253,21 @@ class WebServer {
                 return res.status(400).json({ error: 'Kênh voice không hợp lệ!' });
             }
 
-            const player = musicManager.getOrCreatePlayer(guildId);
-            await player.join(channel);
-            musicManager.emitUpdate(guildId);
-            res.json({ success: true, message: `Đã kết nối vào ${channel.name}` });
+            const botResult = bot.getAvailableBotForVoice(guildId, channel.id);
+            if (!botResult.bot) {
+                return res.status(400).json({ error: 'Tất cả các Bot đều đang bận ở phòng khác!' });
+            }
+
+            const player = musicManager.getOrCreatePlayer(guildId, botResult.bot, channel.id);
+            await player.join(channel, null, botResult.bot);
+            musicManager.emitUpdate(guildId, player);
+            res.json({ success: true, message: `Bot #${botResult.bot.botIndex} (${botResult.bot.user.username}) đã kết nối vào ${channel.name}` });
         });
 
         this.app.post('/api/guilds/:id/leave', (req, res) => {
             const guildId = req.params.id;
-            const player = musicManager.getPlayer(guildId);
+            const { voiceChannelId } = req.body;
+            const player = musicManager.getPlayer(guildId, voiceChannelId);
             if (player) {
                 player.destroy();
             }
@@ -256,7 +283,7 @@ class WebServer {
             const userId = req.session.user.id;
             const { query, trackData } = req.body;
 
-            const guild = bot.client.guilds.cache.get(guildId);
+            const guild = bot.client ? bot.client.guilds.cache.get(guildId) : null;
             if (!guild) return res.status(404).json({ error: 'Server không tìm thấy trên bot!' });
 
             // 1. Tự động quét kênh thoại người dùng đang tham gia
@@ -283,11 +310,24 @@ class WebServer {
                 });
             }
 
+            // 3. Multi-Bot: Điều phối bot khả dụng vào phòng voice
+            const botResult = bot.getAvailableBotForVoice(guildId, targetVoice.id);
+            if (!botResult.bot) {
+                const busyMsg = (botResult.busyList && botResult.busyList.length > 0)
+                    ? `\n\n📌 **Trạng thái các Bot:**\n${botResult.busyList.join('\n')}`
+                    : '';
+                return res.status(400).json({
+                    error: `Tất cả các Bot (${bot.clients.length} bot) hiện đang bận phát nhạc ở các phòng khác!${busyMsg}\n\n💡 Mẹo: Bạn có thể thêm DISCORD_TOKEN_2, DISCORD_TOKEN_3 trong file .env trên Pterodactyl để mở rộng thêm bot vào các phòng khác cùng lúc!`
+                });
+            }
+
+            const chosenBot = botResult.bot;
+
             // Kiểm tra quyền của bot trong kênh thoại
-            const permissions = targetVoice.permissionsFor(bot.client.user);
+            const permissions = targetVoice.permissionsFor(chosenBot.user);
             if (permissions && (!permissions.has('Connect') || !permissions.has('Speak'))) {
                 return res.status(403).json({
-                    error: `Bot không có quyền Tham gia hoặc Nói trong kênh thoại "${targetVoice.name}"!`
+                    error: `Bot #${chosenBot.botIndex} (${chosenBot.user.username}) không có quyền Tham gia hoặc Nói trong kênh thoại "${targetVoice.name}"!`
                 });
             }
 
@@ -298,7 +338,9 @@ class WebServer {
                     guildId,
                     targetVoice,
                     trackData || query,
-                    user
+                    user,
+                    null,
+                    chosenBot
                 );
                 res.json({
                     success: true,
@@ -306,6 +348,11 @@ class WebServer {
                     voiceChannel: {
                         id: targetVoice.id,
                         name: targetVoice.name
+                    },
+                    bot: {
+                        id: chosenBot.user.id,
+                        username: chosenBot.user.username,
+                        index: chosenBot.botIndex
                     }
                 });
             } catch (err) {
@@ -320,11 +367,23 @@ class WebServer {
             }
 
             const guildId = req.params.id;
-            const { action, value } = req.body;
-            const player = musicManager.getPlayer(guildId);
+            const userId = req.session.user.id;
+            const { action, value, voiceChannelId } = req.body;
+
+            const guild = bot.client ? bot.client.guilds.cache.get(guildId) : null;
+            let targetVoiceId = voiceChannelId;
+            if (!targetVoiceId && guild) {
+                const vs = guild.voiceStates.cache.get(userId);
+                if (vs && vs.channelId) targetVoiceId = vs.channelId;
+            }
+
+            let player = musicManager.getPlayer(guildId, targetVoiceId);
+            if (!player) {
+                player = musicManager.getPlayer(guildId);
+            }
 
             if (!player) {
-                return res.status(400).json({ error: 'Bot chưa kết nối vào kênh voice trong server này!' });
+                return res.status(400).json({ error: 'Không tìm thấy bot đang phát nhạc trong phòng của bạn hoặc server này!' });
             }
 
             switch (action) {
@@ -372,7 +431,12 @@ class WebServer {
             socket.on('join_guild', (guildId) => {
                 socket.join(`guild_${guildId}`);
                 const player = musicManager.getPlayer(guildId);
-                socket.emit('player_update', player ? player.toJSON() : { guildId, currentTrack: null, queue: [] });
+                const guildPlayers = musicManager.getPlayersForGuild(guildId);
+                const payload = {
+                    ...(player ? player.toJSON() : { guildId, currentTrack: null, queue: [] }),
+                    activePlayers: guildPlayers.map(p => p.toJSON())
+                };
+                socket.emit('player_update', payload);
             });
 
             socket.on('leave_guild', (guildId) => {
@@ -383,14 +447,16 @@ class WebServer {
 
     startTicker() {
         setInterval(() => {
-            for (const [guildId, player] of musicManager.players.entries()) {
+            for (const player of musicManager.players.values()) {
                 if (player.currentTrack && !player.isPaused) {
                     const currentSeconds = player.getPlaybackDuration();
                     const durationSeconds = player.currentTrack.durationSeconds || 0;
                     const progressPercent = durationSeconds > 0 ? Math.min(100, (currentSeconds / durationSeconds) * 100) : 0;
 
-                    this.io.to(`guild_${guildId}`).emit('tick', {
-                        guildId,
+                    this.io.to(`guild_${player.guildId}`).emit('tick', {
+                        guildId: player.guildId,
+                        voiceChannelId: player.voiceChannelId,
+                        botIndex: player.botIndex,
                         currentSeconds,
                         durationSeconds,
                         progressPercent,

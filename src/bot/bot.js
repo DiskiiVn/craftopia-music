@@ -21,76 +21,96 @@ function createProgressBar(currentSec, totalSec, size = 15) {
     return '▬'.repeat(progress) + '🟢' + '▬'.repeat(Math.max(0, emptyProgress));
 }
 
-class DiscordMusicBot {
+class DiscordMusicBotPool {
     constructor() {
-        this.client = new Client({
-            intents: [
-                GatewayIntentBits.Guilds,
-                GatewayIntentBits.GuildVoiceStates,
-                GatewayIntentBits.GuildMessages
-            ]
-        });
+        this.tokens = config.tokens && config.tokens.length > 0
+            ? config.tokens
+            : (config.token ? [config.token] : []);
 
-        this.setupEvents();
+        this.clients = [];
+        this.setupClients();
+        this.setupGlobalEvents();
     }
 
-    setupEvents() {
-        this.client.once('ready', async () => {
-            console.log(`[Craftopia Music] Đã đăng nhập bot thành công: ${this.client.user.tag}`);
+    // Backward-compatible primary client getter
+    get client() {
+        return this.clients[0] || null;
+    }
 
-            // Register Slash Commands
-            try {
-                const rest = new REST({ version: '10' }).setToken(config.token);
-                console.log('[Craftopia Music] Đang đăng ký Application (Slash) Commands...');
-                await rest.put(
-                    Routes.applicationCommands(this.client.user.id),
-                    { body: commands.map(cmd => cmd.toJSON()) }
-                );
-                console.log('[Craftopia Music] Đã đăng ký Slash Commands thành công!');
-            } catch (err) {
-                console.error('[Craftopia Music] Lỗi khi đăng ký Slash Commands:', err.message);
-            }
+    setupClients() {
+        this.clients = this.tokens.map((tok, index) => {
+            const client = new Client({
+                intents: [
+                    GatewayIntentBits.Guilds,
+                    GatewayIntentBits.GuildVoiceStates,
+                    GatewayIntentBits.GuildMessages
+                ]
+            });
 
-            this.client.user.setActivity('🎵 music.craftopics.online | /play', { type: 2 });
+            client.botIndex = index + 1;
+            client.botToken = tok;
+
+            client.once('ready', async () => {
+                console.log(`[Craftopia Music Pool] Bot #${client.botIndex} (${client.user.tag}) đã online!`);
+
+                // Register Slash Commands for each bot
+                try {
+                    const rest = new REST({ version: '10' }).setToken(tok);
+                    await rest.put(
+                        Routes.applicationCommands(client.user.id),
+                        { body: commands.map(cmd => cmd.toJSON()) }
+                    );
+                    console.log(`[Craftopia Music Pool] Bot #${client.botIndex} đã đăng ký Slash Commands thành công!`);
+                } catch (err) {
+                    console.error(`[Craftopia Music Pool] Lỗi đăng ký Slash Commands cho Bot #${client.botIndex}:`, err.message);
+                }
+
+                client.user.setActivity(`🎵 #${client.botIndex} | music.craftopics.online`, { type: 2 });
+            });
+
+            // Slash command interactions
+            client.on('interactionCreate', async (interaction) => {
+                if (interaction.isChatInputCommand()) {
+                    await this.handleCommand(interaction, client);
+                } else if (interaction.isButton()) {
+                    await this.handleButton(interaction, client);
+                }
+            });
+
+            return client;
         });
+    }
 
-        // Slash command interactions
-        this.client.on('interactionCreate', async (interaction) => {
-            if (interaction.isChatInputCommand()) {
-                await this.handleCommand(interaction);
-            } else if (interaction.isButton()) {
-                await this.handleButton(interaction);
-            }
-        });
-
-        // Track Start Notifications directly into Voice Channel Text Chat
-        musicManager.on('trackStart', async ({ guildId, track, voiceChannelId, textChannelId }) => {
+    setupGlobalEvents() {
+        // Track Start Notification directly into Voice Channel Text Chat
+        musicManager.on('trackStart', async ({ guildId, track, voiceChannelId, textChannelId, botClient, botIndex }) => {
             try {
-                const player = musicManager.getPlayer(guildId);
+                const sendingClient = botClient || this.getBotInVoice(guildId, voiceChannelId) || this.client;
+                if (!sendingClient || !sendingClient.isReady()) return;
+
+                const player = musicManager.getPlayer(guildId, voiceChannelId);
                 const targetChannelId = voiceChannelId || player?.voiceChannelId || textChannelId;
                 if (!targetChannelId) return;
 
-                let channel = await this.client.channels.fetch(targetChannelId).catch(() => null);
+                let channel = await sendingClient.channels.fetch(targetChannelId).catch(() => null);
                 if (!channel || !channel.isTextBased()) {
                     if (textChannelId && textChannelId !== targetChannelId) {
-                        channel = await this.client.channels.fetch(textChannelId).catch(() => null);
+                        channel = await sendingClient.channels.fetch(textChannelId).catch(() => null);
                     }
                 }
                 if (!channel || !channel.isTextBased()) return;
 
                 if (channel.guild) {
-                    const permissions = channel.permissionsFor(this.client.user);
+                    const permissions = channel.permissionsFor(sendingClient.user);
                     if (permissions && (!permissions.has('ViewChannel') || !permissions.has('SendMessages'))) {
                         return;
                     }
                 }
 
-                // Format requester: tag user if has Discord ID
                 const requesterText = (track.requestedBy?.id && track.requestedBy.id !== 'dashboard')
                     ? `<@${track.requestedBy.id}>`
                     : (track.requestedBy?.username || 'Web Dashboard');
 
-                // Upcoming queue list preview
                 const upcomingQueue = player?.queue || [];
                 let queueFieldText = '*(Hàng đợi hiện đang trống)*';
                 if (upcomingQueue.length > 0) {
@@ -107,12 +127,14 @@ class DiscordMusicBot {
                 }
 
                 const voiceName = player?.voiceChannelName || (channel.isVoiceBased() ? channel.name : 'Voice Channel');
+                const botTag = sendingClient.user.username;
+                const botBadge = `Bot #${botIndex || sendingClient.botIndex || 1} (${botTag})`;
 
                 const embed = new EmbedBuilder()
                     .setColor(BRAND_COLOR)
                     .setAuthor({
-                        name: 'ĐANG PHÁT TRONG PHÒNG VOICE 🔊',
-                        iconURL: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&h=100&fit=crop'
+                        name: `ĐANG PHÁT TRONG PHÒNG VOICE • ${botBadge} 🔊`,
+                        iconURL: sendingClient.user.displayAvatarURL() || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&h=100&fit=crop'
                     })
                     .setTitle(`🎵 ${track.title}`)
                     .setURL(track.url)
@@ -126,6 +148,11 @@ class DiscordMusicBot {
                         {
                             name: '🔊 Phòng thoại',
                             value: `\`${voiceName}\``,
+                            inline: true
+                        },
+                        {
+                            name: '🤖 Bot phục vụ',
+                            value: `\`${botBadge}\``,
                             inline: true
                         },
                         {
@@ -176,18 +203,21 @@ class DiscordMusicBot {
             }
         });
 
-        // Track Added to Queue Notification in Voice Channel Text Chat
-        musicManager.on('trackAdd', async ({ guildId, track, position, voiceChannelId, textChannelId }) => {
+        // Track Added to Queue Notification
+        musicManager.on('trackAdd', async ({ guildId, track, position, voiceChannelId, textChannelId, botClient, botIndex }) => {
             try {
-                const player = musicManager.getPlayer(guildId);
+                const sendingClient = botClient || this.getBotInVoice(guildId, voiceChannelId) || this.client;
+                if (!sendingClient || !sendingClient.isReady()) return;
+
+                const player = musicManager.getPlayer(guildId, voiceChannelId);
                 const targetChannelId = voiceChannelId || player?.voiceChannelId || textChannelId;
                 if (!targetChannelId) return;
 
-                let channel = await this.client.channels.fetch(targetChannelId).catch(() => null);
+                let channel = await sendingClient.channels.fetch(targetChannelId).catch(() => null);
                 if (!channel || !channel.isTextBased()) return;
 
                 if (channel.guild) {
-                    const permissions = channel.permissionsFor(this.client.user);
+                    const permissions = channel.permissionsFor(sendingClient.user);
                     if (permissions && (!permissions.has('ViewChannel') || !permissions.has('SendMessages'))) {
                         return;
                     }
@@ -200,8 +230,8 @@ class DiscordMusicBot {
                 const embed = new EmbedBuilder()
                     .setColor(0x06B6D4)
                     .setAuthor({
-                        name: 'ĐÃ THÊM VÀO HÀNG ĐỢI ➕',
-                        iconURL: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&h=100&fit=crop'
+                        name: `ĐÃ THÊM VÀO HÀNG ĐỢI (Bot #${botIndex || sendingClient.botIndex || 1}) ➕`,
+                        iconURL: sendingClient.user.displayAvatarURL()
                     })
                     .setTitle(`➕ ${track.title}`)
                     .setURL(track.url)
@@ -222,7 +252,70 @@ class DiscordMusicBot {
         });
     }
 
-    async handleCommand(interaction) {
+    getBotInVoice(guildId, voiceChannelId) {
+        if (!voiceChannelId) return null;
+        for (const client of this.clients) {
+            if (!client.isReady()) continue;
+            const g = client.guilds.cache.get(guildId);
+            if (g && g.members.me?.voice?.channelId === voiceChannelId) {
+                return client;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Dispatch an available bot for a requested voice channel.
+     * 1. If a bot is already connected to this channel, use it.
+     * 2. Otherwise find a bot in the pool that is idle (not connected to any channel in this server).
+     */
+    getAvailableBotForVoice(guildId, voiceChannelId) {
+        // 1. Is there already a bot inside this voice channel?
+        const currentBot = this.getBotInVoice(guildId, voiceChannelId);
+        if (currentBot) {
+            return { bot: currentBot, isExisting: true };
+        }
+
+        const existingPlayer = musicManager.getPlayerByVoice(guildId, voiceChannelId);
+        if (existingPlayer && existingPlayer.botClient) {
+            return { bot: existingPlayer.botClient, isExisting: true };
+        }
+
+        // 2. Find a free bot that belongs to this guild and is idle
+        const busyList = [];
+        const missingFromGuild = [];
+
+        for (const client of this.clients) {
+            if (!client.isReady()) continue;
+            const g = client.guilds.cache.get(guildId);
+            if (!g) {
+                missingFromGuild.push(client);
+                continue;
+            }
+
+            const activeVoiceId = g.members.me?.voice?.channelId;
+            const player = musicManager.getPlayer(guildId, null, client.user.id);
+            const isBusy = !!activeVoiceId || (player && player.currentTrack && player.voiceChannelId);
+
+            if (!isBusy) {
+                return { bot: client, isExisting: false };
+            } else {
+                const vId = activeVoiceId || player?.voiceChannelId;
+                const ch = g.channels.cache.get(vId);
+                const chName = ch ? ch.name : vId;
+                busyList.push(`• **Bot #${client.botIndex} (${client.user.username})**: đang phát ở phòng \`#${chName}\``);
+            }
+        }
+
+        return {
+            bot: null,
+            busyList,
+            missingFromGuild,
+            totalBots: this.clients.length
+        };
+    }
+
+    async handleCommand(interaction, invokingClient) {
         const { commandName, guildId, member, channel } = interaction;
         const voiceChannel = member?.voice?.channel;
         const dashboardUrl = `${config.domain}?guild=${guildId}`;
@@ -233,7 +326,8 @@ class DiscordMusicBot {
                 .setTitle('🎧 Craftopia Music Web Dashboard')
                 .setDescription(`Điều khiển âm nhạc trực tiếp theo thời gian thực tại tên miền chính thức:\n\n🔗 **[Mở Craftopia Music Dashboard](${dashboardUrl})**\n*(Domain: \`${config.domain}\`)*`)
                 .addFields(
-                    { name: '✨ Tính năng', value: '• Tìm kiếm bài hát trực tiếp\n• Tua bài hát theo từng giây\n• Tăng giảm âm lượng & xáo trộn\n• Chế độ toàn màn hình Theater Mode', inline: false }
+                    { name: '✨ Cụm Multi-Bot', value: `Hệ thống hỗ trợ đồng thời **${this.clients.length} Bot** phục vụ nhiều phòng voice cùng lúc.`, inline: false },
+                    { name: '✨ Tính năng', value: '• Tìm kiếm bài hát trực tiếp\n• Tự động quét phòng voice khi phát\n• Tua bài hát theo từng giây\n• Tăng giảm âm lượng & xáo trộn\n• Chế độ toàn màn hình Theater Mode', inline: false }
                 )
                 .setThumbnail('https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&h=100&fit=crop');
 
@@ -255,12 +349,29 @@ class DiscordMusicBot {
             });
         }
 
-        const player = musicManager.getPlayer(guildId);
+        // Get player corresponding to user's voice channel
+        let player = musicManager.getPlayer(guildId, voiceChannel.id);
+        if (!player) {
+            player = musicManager.getPlayer(guildId, null, invokingClient.user.id) || musicManager.getPlayer(guildId);
+        }
 
         switch (commandName) {
             case 'play': {
                 const query = interaction.options.getString('query');
                 await interaction.deferReply();
+
+                // Select appropriate bot from pool
+                const botResult = this.getAvailableBotForVoice(guildId, voiceChannel.id);
+                let chosenBot = botResult.bot;
+
+                if (!chosenBot) {
+                    const busyDesc = botResult.busyList.length > 0
+                        ? `\n\n📌 **Trạng thái các bot hiện tại:**\n${botResult.busyList.join('\n')}`
+                        : '';
+                    return interaction.editReply({
+                        content: `❌ **Tất cả các Bot (${botResult.totalBots} bot) hiện đều đang bận phát nhạc ở các phòng khác!**${busyDesc}\n\n💡 *Gợi ý: Thêm \`DISCORD_TOKEN_2\`, \`DISCORD_TOKEN_3\` vào file .env trên Pterodactyl để mở rộng thêm bot phục vụ song song nhiều phòng nhé!*`
+                    });
+                }
 
                 try {
                     const result = await musicManager.enqueue(
@@ -268,7 +379,8 @@ class DiscordMusicBot {
                         voiceChannel,
                         query,
                         interaction.user,
-                        channel.id
+                        channel.id,
+                        chosenBot
                     );
 
                     const track = result.track;
@@ -276,14 +388,18 @@ class DiscordMusicBot {
                         .setColor(BRAND_COLOR)
                         .setThumbnail(track.thumbnail);
 
+                    const botNotice = chosenBot.id !== invokingClient.user.id
+                        ? `\n*(Điều phối **Bot #${chosenBot.botIndex} (${chosenBot.user.username})** vào phục vụ phòng của bạn)*`
+                        : '';
+
                     if (result.type === 'playing') {
                         embed
                             .setTitle('▶️ Đang phát bài hát')
-                            .setDescription(`[${track.title}](${track.url})\n\n**Nghệ sĩ:** ${track.artist}\n**Thời lượng:** \`${track.durationFormatted}\``);
+                            .setDescription(`[${track.title}](${track.url})\n\n**Nghệ sĩ:** ${track.artist}\n**Thời lượng:** \`${track.durationFormatted}\`${botNotice}`);
                     } else {
                         embed
                             .setTitle('➕ Đã thêm vào hàng đợi')
-                            .setDescription(`[${track.title}](${track.url})\n\n**Vị trí:** \`#${result.position}\`\n**Thời lượng:** \`${track.durationFormatted}\``);
+                            .setDescription(`[${track.title}](${track.url})\n\n**Vị trí:** \`#${result.position}\`\n**Thời lượng:** \`${track.durationFormatted}\`${botNotice}`);
                     }
 
                     const row = new ActionRowBuilder().addComponents(
@@ -304,7 +420,7 @@ class DiscordMusicBot {
 
             case 'pause': {
                 if (!player || !player.currentTrack) {
-                    return interaction.reply({ content: '❌ Hiện tại không có bài hát nào đang phát!', ephemeral: true });
+                    return interaction.reply({ content: '❌ Hiện tại không có bài hát nào đang phát trong phòng của bạn!', ephemeral: true });
                 }
                 const paused = player.pause();
                 return interaction.reply(paused ? '⏸️ Đã tạm dừng phát nhạc!' : '⚠️ Bài hát đã ở trạng thái tạm dừng từ trước!');
@@ -312,7 +428,7 @@ class DiscordMusicBot {
 
             case 'resume': {
                 if (!player || !player.currentTrack) {
-                    return interaction.reply({ content: '❌ Hiện tại không có bài hát nào đang phát!', ephemeral: true });
+                    return interaction.reply({ content: '❌ Hiện tại không có bài hát nào đang phát trong phòng của bạn!', ephemeral: true });
                 }
                 const resumed = player.resume();
                 return interaction.reply(resumed ? '▶️ Đã tiếp tục phát nhạc!' : '⚠️ Bài hát đang phát bình thường!');
@@ -336,7 +452,7 @@ class DiscordMusicBot {
 
             case 'stop': {
                 if (!player) {
-                    return interaction.reply({ content: '❌ Bot hiện không phát nhạc!', ephemeral: true });
+                    return interaction.reply({ content: '❌ Bot hiện không phát nhạc trong phòng của bạn!', ephemeral: true });
                 }
                 player.destroy();
                 return interaction.reply('⏹️ Đã dừng phát nhạc, dọn dẹp hàng đợi và rời phòng!');
@@ -344,7 +460,7 @@ class DiscordMusicBot {
 
             case 'nowplaying': {
                 if (!player || !player.currentTrack) {
-                    return interaction.reply({ content: '❌ Hiện tại không có bài hát nào đang phát!', ephemeral: true });
+                    return interaction.reply({ content: '❌ Hiện tại không có bài hát nào đang phát trong phòng của bạn!', ephemeral: true });
                 }
                 const track = player.currentTrack;
                 const curSec = player.getPlaybackDuration();
@@ -353,10 +469,10 @@ class DiscordMusicBot {
 
                 const embed = new EmbedBuilder()
                     .setColor(BRAND_COLOR)
-                    .setAuthor({ name: 'CRAFTOPIA MUSIC', iconURL: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&h=100&fit=crop' })
+                    .setAuthor({ name: `CRAFTOPIA MUSIC • BOT #${player.botIndex || 1}`, iconURL: player.botUser?.displayAvatarURL() || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&h=100&fit=crop' })
                     .setTitle(track.title)
                     .setURL(track.url)
-                    .setDescription(`**Nghệ sĩ:** ${track.artist}\n\n\`${musicManager.formatDuration(curSec)}\` ${bar} \`${track.durationFormatted}\`\n\n**Âm lượng:** \`${player.volume}%\` | **Lặp:** \`${player.loopMode.toUpperCase()}\``)
+                    .setDescription(`**Nghệ sĩ:** ${track.artist}\n\n\`${musicManager.formatDuration(curSec)}\` ${bar} \`${track.durationFormatted}\`\n\n**Phòng thoại:** \`${player.voiceChannelName}\`\n**Âm lượng:** \`${player.volume}%\` | **Lặp:** \`${player.loopMode.toUpperCase()}\``)
                     .setThumbnail(track.thumbnail)
                     .setFooter({ text: `Yêu cầu bởi ${track.requestedBy ? track.requestedBy.username : 'Dashboard'}` });
 
@@ -373,10 +489,10 @@ class DiscordMusicBot {
 
             case 'queue': {
                 if (!player || (!player.currentTrack && player.queue.length === 0)) {
-                    return interaction.reply({ content: '📭 Hàng đợi hiện đang trống!', ephemeral: true });
+                    return interaction.reply({ content: '📭 Hàng đợi trong phòng của bạn hiện đang trống!', ephemeral: true });
                 }
 
-                let desc = `**Bài đang phát:**\n▶️ [${player.currentTrack.title}](${player.currentTrack.url}) - \`${player.currentTrack.durationFormatted}\`\n\n**Hàng đợi tiếp theo:**\n`;
+                let desc = `**Phòng thoại:** \`${player.voiceChannelName}\` *(Bot #${player.botIndex || 1})*\n**Bài đang phát:**\n▶️ [${player.currentTrack.title}](${player.currentTrack.url}) - \`${player.currentTrack.durationFormatted}\`\n\n**Hàng đợi tiếp theo:**\n`;
 
                 if (player.queue.length === 0) {
                     desc += '*Không có bài hát tiếp theo. Hãy thêm bài mới bằng /play hoặc trên Dashboard!*';
@@ -407,7 +523,7 @@ class DiscordMusicBot {
 
             case 'volume': {
                 if (!player) {
-                    return interaction.reply({ content: '❌ Bot chưa kết nối vào kênh voice!', ephemeral: true });
+                    return interaction.reply({ content: '❌ Bot chưa kết nối vào kênh voice của bạn!', ephemeral: true });
                 }
                 const level = interaction.options.getInteger('level');
                 player.setVolume(level);
@@ -416,7 +532,7 @@ class DiscordMusicBot {
 
             case 'loop': {
                 if (!player) {
-                    return interaction.reply({ content: '❌ Bot chưa kết nối vào kênh voice!', ephemeral: true });
+                    return interaction.reply({ content: '❌ Bot chưa kết nối vào kênh voice của bạn!', ephemeral: true });
                 }
                 const mode = interaction.options.getString('mode');
                 player.setLoop(mode);
@@ -434,7 +550,7 @@ class DiscordMusicBot {
         }
     }
 
-    async handleButton(interaction) {
+    async handleButton(interaction, invokingClient) {
         const { customId, guildId, member } = interaction;
         const voiceChannel = member?.voice?.channel;
 
@@ -442,9 +558,13 @@ class DiscordMusicBot {
             return interaction.reply({ content: '❌ Bạn phải vào kênh Voice để điều khiển nút này!', ephemeral: true });
         }
 
-        const player = musicManager.getPlayer(guildId);
+        let player = musicManager.getPlayer(guildId, voiceChannel.id);
         if (!player) {
-            return interaction.reply({ content: '❌ Hiện không có bài hát nào đang phát!', ephemeral: true });
+            player = musicManager.getPlayer(guildId, null, invokingClient.user.id) || musicManager.getPlayer(guildId);
+        }
+
+        if (!player) {
+            return interaction.reply({ content: '❌ Hiện không có bài hát nào đang phát trong phòng của bạn!', ephemeral: true });
         }
 
         if (customId.startsWith('btn_pause_')) {
@@ -466,12 +586,20 @@ class DiscordMusicBot {
     }
 
     async start() {
-        if (!config.token) {
-            console.error('[Craftopia Music] Chưa cung cấp DISCORD_TOKEN trong file .env hoặc config.js!');
+        if (this.clients.length === 0) {
+            console.error('[Craftopia Music Pool] Chưa cung cấp DISCORD_TOKEN trong file .env hoặc config.js!');
             return;
         }
-        await this.client.login(config.token);
+
+        console.log(`[Craftopia Music Pool] Đang khởi động ${this.clients.length} bot trong cụm Multi-Bot...`);
+        const loginPromises = this.clients.map((client, idx) => {
+            return client.login(client.botToken).catch((err) => {
+                console.error(`[Craftopia Music Pool] Lỗi đăng nhập Bot #${idx + 1}:`, err.message);
+            });
+        });
+
+        await Promise.allSettled(loginPromises);
     }
 }
 
-module.exports = new DiscordMusicBot();
+module.exports = new DiscordMusicBotPool();

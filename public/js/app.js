@@ -582,10 +582,11 @@ function updatePlayerUI(player) {
 
     // Voice Status
     if (player.voiceChannelName) {
+        const botName = player.bot?.username ? ` • ${player.bot.username}` : '';
         voiceChannelName.textContent = player.voiceChannelName;
-        voiceChannelSub.textContent = 'Bot sẵn sàng phát nhạc';
-        barVoiceBadge.textContent = `🔊 ${player.voiceChannelName}`;
-        theaterVoiceBadge.textContent = `🔊 ${player.voiceChannelName}`;
+        voiceChannelSub.textContent = player.bot ? `Phục vụ bởi Bot #${player.bot.index || 1} (${player.bot.username})` : 'Bot sẵn sàng phát nhạc';
+        barVoiceBadge.textContent = `🔊 ${player.voiceChannelName}${botName}`;
+        theaterVoiceBadge.textContent = `🔊 ${player.voiceChannelName}${botName}`;
     } else {
         voiceChannelName.textContent = 'Chưa kết nối';
         voiceChannelSub.textContent = 'Bấm để tham gia';

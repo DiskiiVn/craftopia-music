@@ -12,10 +12,15 @@ const yts = require('yt-search');
 const EventEmitter = require('events');
 
 class GuildPlayer extends EventEmitter {
-    constructor(guildId, manager) {
+    constructor(guildId, manager, botClient = null, botIndex = 1) {
         super();
         this.guildId = guildId;
         this.manager = manager;
+        this.botClient = botClient;
+        this.botIndex = botIndex;
+        this.botUser = botClient ? botClient.user : null;
+        this.playerKey = botClient?.user?.id ? `${guildId}:${botClient.user.id}` : guildId;
+
         this.queue = [];
         this.history = [];
         this.currentTrack = null;
@@ -38,18 +43,18 @@ class GuildPlayer extends EventEmitter {
     setupAudioPlayer() {
         this.audioPlayer.on(AudioPlayerStatus.Playing, () => {
             this.isPaused = false;
-            this.manager.emitUpdate(this.guildId);
+            this.manager.emitUpdate(this.guildId, this);
         });
 
         this.audioPlayer.on(AudioPlayerStatus.Paused, () => {
             this.isPaused = true;
             this.pauseStartTime = Date.now();
-            this.manager.emitUpdate(this.guildId);
+            this.manager.emitUpdate(this.guildId, this);
         });
 
         this.audioPlayer.on(AudioPlayerStatus.AutoPaused, () => {
             this.isPaused = true;
-            this.manager.emitUpdate(this.guildId);
+            this.manager.emitUpdate(this.guildId, this);
         });
 
         this.audioPlayer.on(AudioPlayerStatus.Idle, () => {
@@ -57,7 +62,7 @@ class GuildPlayer extends EventEmitter {
         });
 
         this.audioPlayer.on('error', (error) => {
-            console.error(`[GuildPlayer ${this.guildId}] AudioPlayer error:`, error.message);
+            console.error(`[GuildPlayer ${this.playerKey}] AudioPlayer error:`, error.message);
             this.handleTrackEnd();
         });
     }
@@ -85,15 +90,36 @@ class GuildPlayer extends EventEmitter {
         } else {
             this.currentTrack = null;
             this.resource = null;
-            this.manager.emitUpdate(this.guildId);
-            this.manager.emit('queueEmpty', { guildId: this.guildId, textChannelId: this.textChannelId });
+            this.manager.emitUpdate(this.guildId, this);
+            this.manager.emit('queueEmpty', {
+                guildId: this.guildId,
+                textChannelId: this.textChannelId,
+                voiceChannelId: this.voiceChannelId,
+                botClient: this.botClient
+            });
         }
     }
 
-    async join(voiceChannel, textChannelId = null) {
+    async join(voiceChannel, textChannelId = null, botClient = null) {
+        if (botClient) {
+            this.botClient = botClient;
+            this.botUser = botClient.user;
+            this.botIndex = botClient.botIndex || this.botIndex || 1;
+            this.playerKey = `${this.guildId}:${botClient.user.id}`;
+        }
+
         this.textChannelId = textChannelId || this.textChannelId;
         this.voiceChannelId = voiceChannel.id;
         this.voiceChannelName = voiceChannel.name;
+
+        // Ensure we retrieve the voice adapter from THIS bot client's cache
+        const clientGuild = (this.botClient && this.botClient.guilds.cache.get(this.guildId))
+            ? this.botClient.guilds.cache.get(this.guildId)
+            : voiceChannel.guild;
+        const adapter = clientGuild ? clientGuild.voiceAdapterCreator : voiceChannel.guild.voiceAdapterCreator;
+
+        // Group connection by bot user ID to isolate voice gateways in multi-bot cluster
+        const connectionGroup = this.botUser ? String(this.botUser.id) : 'default';
 
         const needsNewConnection = !this.voiceConnection ||
             this.voiceConnection.state.status === VoiceConnectionStatus.Destroyed ||
@@ -107,7 +133,8 @@ class GuildPlayer extends EventEmitter {
             this.voiceConnection = joinVoiceChannel({
                 channelId: voiceChannel.id,
                 guildId: voiceChannel.guild.id,
-                adapterCreator: voiceChannel.guild.voiceAdapterCreator,
+                adapterCreator: adapter,
+                group: connectionGroup,
                 selfDeaf: true,
                 selfMute: false
             });
@@ -126,12 +153,12 @@ class GuildPlayer extends EventEmitter {
             });
         }
 
-        // CRUCIAL: Await Ready state so Discord UDP voice socket is 100% connected
+        // Await Ready state so Discord UDP voice socket is 100% connected
         if (this.voiceConnection.state.status !== VoiceConnectionStatus.Ready) {
             try {
                 await entersState(this.voiceConnection, VoiceConnectionStatus.Ready, 15000);
             } catch (err) {
-                console.error(`[GuildPlayer ${this.guildId}] Failed to reach Voice Ready state:`, err.message);
+                console.error(`[GuildPlayer ${this.playerKey}] Failed to reach Voice Ready state:`, err.message);
             }
         }
 
@@ -153,7 +180,7 @@ class GuildPlayer extends EventEmitter {
             });
 
             stream.on('error', (err) => {
-                console.error(`[GuildPlayer ${this.guildId}] YTDL stream error:`, err.message);
+                console.error(`[GuildPlayer ${this.playerKey}] YTDL stream error:`, err.message);
             });
 
             this.resource = createAudioResource(stream, {
@@ -165,15 +192,18 @@ class GuildPlayer extends EventEmitter {
             }
 
             this.audioPlayer.play(this.resource);
-            this.manager.emitUpdate(this.guildId);
+            this.manager.emitUpdate(this.guildId, this);
             this.manager.emit('trackStart', {
                 guildId: this.guildId,
                 track,
                 voiceChannelId: this.voiceChannelId,
-                textChannelId: this.textChannelId
+                textChannelId: this.textChannelId,
+                botClient: this.botClient,
+                botUser: this.botUser,
+                botIndex: this.botIndex
             });
         } catch (error) {
-            console.error(`[GuildPlayer ${this.guildId}] Error playing track:`, error.message);
+            console.error(`[GuildPlayer ${this.playerKey}] Error playing track:`, error.message);
             this.handleTrackEnd();
         }
     }
@@ -191,7 +221,7 @@ class GuildPlayer extends EventEmitter {
             this.audioPlayer.pause();
             this.isPaused = true;
             this.pauseStartTime = Date.now();
-            this.manager.emitUpdate(this.guildId);
+            this.manager.emitUpdate(this.guildId, this);
             return true;
         }
         return false;
@@ -204,7 +234,7 @@ class GuildPlayer extends EventEmitter {
             }
             this.audioPlayer.unpause();
             this.isPaused = false;
-            this.manager.emitUpdate(this.guildId);
+            this.manager.emitUpdate(this.guildId, this);
             return true;
         }
         return false;
@@ -245,7 +275,7 @@ class GuildPlayer extends EventEmitter {
         if (this.resource && this.resource.volume) {
             this.resource.volume.setVolumeLogarithmic(this.volume / 100);
         }
-        this.manager.emitUpdate(this.guildId);
+        this.manager.emitUpdate(this.guildId, this);
         return this.volume;
     }
 
@@ -255,7 +285,7 @@ class GuildPlayer extends EventEmitter {
         } else {
             this.loopMode = this.loopMode === 'off' ? 'track' : this.loopMode === 'track' ? 'queue' : 'off';
         }
-        this.manager.emitUpdate(this.guildId);
+        this.manager.emitUpdate(this.guildId, this);
         return this.loopMode;
     }
 
@@ -265,19 +295,19 @@ class GuildPlayer extends EventEmitter {
             const j = Math.floor(Math.random() * (i + 1));
             [this.queue[i], this.queue[j]] = [this.queue[j], this.queue[i]];
         }
-        this.manager.emitUpdate(this.guildId);
+        this.manager.emitUpdate(this.guildId, this);
         return this.queue;
     }
 
     removeTrack(index) {
         if (index === -1) {
             this.queue = [];
-            this.manager.emitUpdate(this.guildId);
+            this.manager.emitUpdate(this.guildId, this);
             return true;
         }
         if (index >= 0 && index < this.queue.length) {
             const removed = this.queue.splice(index, 1)[0];
-            this.manager.emitUpdate(this.guildId);
+            this.manager.emitUpdate(this.guildId, this);
             return removed;
         }
         return null;
@@ -293,8 +323,11 @@ class GuildPlayer extends EventEmitter {
             } catch {}
             this.voiceConnection = null;
         }
-        this.manager.emitUpdate(this.guildId);
-        this.manager.players.delete(this.guildId);
+        this.manager.players.delete(this.playerKey);
+        if (this.manager.players.get(this.guildId) === this) {
+            this.manager.players.delete(this.guildId);
+        }
+        this.manager.emitUpdate(this.guildId, this);
     }
 
     toJSON() {
@@ -304,6 +337,14 @@ class GuildPlayer extends EventEmitter {
 
         return {
             guildId: this.guildId,
+            playerKey: this.playerKey,
+            bot: {
+                id: this.botUser?.id || '',
+                username: this.botUser?.username || `Bot #${this.botIndex}`,
+                tag: this.botUser?.tag || `Bot #${this.botIndex}`,
+                avatar: this.botUser ? (this.botUser.avatar ? `https://cdn.discordapp.com/avatars/${this.botUser.id}/${this.botUser.avatar}.png` : 'https://cdn.discordapp.com/embed/avatars/0.png') : 'https://cdn.discordapp.com/embed/avatars/0.png',
+                index: this.botIndex
+            },
             voiceChannelId: this.voiceChannelId,
             voiceChannelName: this.voiceChannelName,
             textChannelId: this.textChannelId,
@@ -335,26 +376,82 @@ class MusicManager extends EventEmitter {
         this.io = io;
     }
 
-    emitUpdate(guildId) {
-        const player = this.players.get(guildId);
-        const data = player ? player.toJSON() : { guildId, currentTrack: null, queue: [] };
-        if (this.io) {
-            this.io.to(`guild_${guildId}`).emit('player_update', data);
+    getPlayersForGuild(guildId) {
+        const set = new Set();
+        const result = [];
+        for (const player of this.players.values()) {
+            if (player.guildId === guildId && !set.has(player.playerKey)) {
+                set.add(player.playerKey);
+                result.push(player);
+            }
         }
-        this.emit('update', { guildId, data });
+        return result;
     }
 
-    getPlayer(guildId) {
-        return this.players.get(guildId) || null;
+    getPlayerByVoice(guildId, voiceChannelId) {
+        if (!voiceChannelId) return null;
+        for (const player of this.players.values()) {
+            if (player.guildId === guildId && player.voiceChannelId === voiceChannelId) {
+                return player;
+            }
+        }
+        return null;
     }
 
-    getOrCreatePlayer(guildId) {
+    getPlayer(guildId, voiceChannelId = null, botId = null) {
+        if (botId) {
+            const key = `${guildId}:${botId}`;
+            if (this.players.has(key)) return this.players.get(key);
+        }
+        if (voiceChannelId) {
+            const p = this.getPlayerByVoice(guildId, voiceChannelId);
+            if (p) return p;
+        }
+        if (this.players.has(guildId)) return this.players.get(guildId);
+        const guildPlayers = this.getPlayersForGuild(guildId);
+        return guildPlayers[0] || null;
+    }
+
+    getOrCreatePlayer(guildId, botClient = null, voiceChannelId = null) {
+        if (voiceChannelId) {
+            const existing = this.getPlayerByVoice(guildId, voiceChannelId);
+            if (existing) return existing;
+        }
+        if (botClient && botClient.user) {
+            const key = `${guildId}:${botClient.user.id}`;
+            let player = this.players.get(key);
+            if (!player) {
+                player = new GuildPlayer(guildId, this, botClient, botClient.botIndex || 1);
+                this.players.set(key, player);
+                if (!this.players.has(guildId)) {
+                    this.players.set(guildId, player);
+                }
+            }
+            return player;
+        }
         let player = this.players.get(guildId);
         if (!player) {
-            player = new GuildPlayer(guildId, this);
+            player = new GuildPlayer(guildId, this, null, 1);
             this.players.set(guildId, player);
         }
         return player;
+    }
+
+    emitUpdate(guildId, specificPlayer = null) {
+        const guildPlayers = this.getPlayersForGuild(guildId);
+        const activePlayers = guildPlayers.map(p => p.toJSON());
+        const primary = specificPlayer || guildPlayers.find(p => p.currentTrack && !p.isPaused) || guildPlayers[0];
+        const mainData = primary ? primary.toJSON() : { guildId, currentTrack: null, queue: [] };
+
+        const payload = {
+            ...mainData,
+            activePlayers: activePlayers
+        };
+
+        if (this.io) {
+            this.io.to(`guild_${guildId}`).emit('player_update', payload);
+        }
+        this.emit('update', { guildId, data: payload });
     }
 
     async search(query, limit = 12) {
@@ -408,9 +505,18 @@ class MusicManager extends EventEmitter {
         return `${m}:${s < 10 ? '0' : ''}${s}`;
     }
 
-    async enqueue(guildId, voiceChannel, query, requestedBy, textChannelId = null) {
-        const player = this.getOrCreatePlayer(guildId);
-        await player.join(voiceChannel, textChannelId);
+    async enqueue(guildId, voiceChannel, query, requestedBy, textChannelId = null, botClient = null) {
+        let player = null;
+        if (botClient && botClient.user) {
+            player = this.getOrCreatePlayer(guildId, botClient, voiceChannel.id);
+        } else {
+            player = this.getPlayerByVoice(guildId, voiceChannel.id);
+            if (!player) {
+                player = this.getOrCreatePlayer(guildId, null, voiceChannel.id);
+            }
+        }
+
+        await player.join(voiceChannel, textChannelId, botClient);
 
         let tracks = [];
         if (typeof query === 'string') {
@@ -437,13 +543,16 @@ class MusicManager extends EventEmitter {
             return { type: 'playing', track, player };
         } else {
             player.queue.push(track);
-            this.emitUpdate(guildId);
+            this.emitUpdate(guildId, player);
             this.emit('trackAdd', {
                 guildId,
                 track,
                 position: player.queue.length,
                 voiceChannelId: player.voiceChannelId,
-                textChannelId: player.textChannelId
+                textChannelId: player.textChannelId,
+                botClient: player.botClient,
+                botUser: player.botUser,
+                botIndex: player.botIndex
             });
             return { type: 'queued', track, position: player.queue.length, player };
         }
