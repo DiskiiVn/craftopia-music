@@ -3,12 +3,16 @@ const axios = require('axios');
 class LyricsService {
     constructor() {
         this.cache = new Map();
-        this.client = axios.create({
+        this.lrclib = axios.create({
             baseURL: 'https://lrclib.net/api',
             timeout: 6000,
             headers: {
                 'User-Agent': 'CraftopiaMusic/2.0 (https://music.craftopics.online; contact@craftopics.online)'
             }
+        });
+        this.lyricsOvh = axios.create({
+            baseURL: 'https://api.lyrics.ovh/v1',
+            timeout: 5000
         });
     }
 
@@ -24,34 +28,53 @@ class LyricsService {
         let t = (rawTitle || '').trim();
         let a = (rawArtist || '').trim();
 
-        // 1. Remove bracketed noise: [OFFICIAL MV], (Official Music Video), (Lyric Video), [4K], etc.
+        // 1. Normalize unicode dashes: en-dash, em-dash, etc. to regular '-'
+        t = t.replace(/[\u2010-\u2015\u2212]/g, '-');
+
+        // 2. Remove bracketed junk: [OFFICIAL MV], (Official Music Video), (Lyric Video), [4K], [feat. ...], etc.
         t = t.replace(/\s*[\(\[](?:official|music\s*video|audio|lyrics?|mv|hd|4k|remix|prod\.|feat\.|ft\.|visualizer|vietsub|video|nhạc\s*trẻ|m\/v)[^\)\]]*[\)\]]/gi, '').trim();
 
         const junkRegex = /^(?:official\s*(?:music)?\s*(?:video|audio|mv|lyrics?)?|music\s*video|mv|audio|lyrics?|video\s*lyric|hd|4k|karaoke|full\s*hd|teaser|trailer|vietsub)$/i;
 
-        let detectedTrack = t;
-        let detectedArtist = a;
+        // 3. Multi-level segmentation: split by '|', then further split by ' - '
+        let segments = [];
+        const pipeParts = t.split(/\s*\|\s*/).map(p => p.trim()).filter(p => p && !junkRegex.test(p));
 
-        // Split by pipe '|' first as YouTube titles use it for major delimiters
-        if (t.includes('|')) {
-            const parts = t.split(/\s*\|\s*/).map(p => p.trim()).filter(p => p && !junkRegex.test(p));
-            if (parts.length >= 2) {
-                detectedArtist = parts[0];
-                detectedTrack = parts[1];
-            } else if (parts.length === 1) {
-                detectedTrack = parts[0];
-            }
-        } else if (t.includes(' - ')) {
-            const parts = t.split(/\s+-\s+/).map(p => p.trim()).filter(p => p && !junkRegex.test(p));
-            if (parts.length >= 2) {
-                detectedArtist = parts[0];
-                detectedTrack = parts[1];
-            } else if (parts.length === 1) {
-                detectedTrack = parts[0];
+        for (const p of pipeParts) {
+            if (p.includes(' - ')) {
+                const sub = p.split(/\s+-\s+/).map(s => s.trim()).filter(s => s && !junkRegex.test(s));
+                segments.push(...sub);
+            } else {
+                segments.push(p);
             }
         }
 
-        // Clean YouTube channel suffix
+        let detectedTrack = t;
+        let detectedArtist = a;
+
+        if (segments.length >= 2) {
+            const seg0 = segments[0];
+            const seg1 = segments[1];
+
+            // Compare with artist string
+            const cleanA = a.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const clean0 = seg0.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const clean1 = seg1.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+            if (cleanA && (clean0.includes(cleanA) || cleanA.includes(clean0))) {
+                detectedArtist = seg0;
+                detectedTrack = seg1;
+            } else if (cleanA && (clean1.includes(cleanA) || cleanA.includes(clean1))) {
+                detectedArtist = seg1;
+                detectedTrack = seg0;
+            } else {
+                detectedArtist = seg0;
+                detectedTrack = seg1;
+            }
+        } else if (segments.length === 1) {
+            detectedTrack = segments[0];
+        }
+
         detectedArtist = detectedArtist.replace(/\b(?:official|channel|vevo|topic|music)\b/gi, '').trim();
         const primaryArtist = detectedArtist.split(/\b(?:x|feat\.?|ft\.?)\b|&|,/i)[0].trim();
 
@@ -92,33 +115,32 @@ class LyricsService {
             return this.cache.get(cacheKey);
         }
 
+        // Try LRCLIB first for synchronized lyrics
         try {
-            // Strategy 1: Direct exact match via /api/get
             const directCandidates = [
                 { track_name: cleaned.track, artist_name: cleaned.primaryArtist },
                 { track_name: cleaned.track, artist_name: cleaned.artist },
+                { track_name: cleaned.track, artist_name: rawArtist },
                 { track_name: this.stripDiacritics(cleaned.track), artist_name: this.stripDiacritics(cleaned.primaryArtist) },
-                { track_name: cleaned.track, artist_name: rawArtist }
+                { track_name: this.stripDiacritics(cleaned.track), artist_name: this.stripDiacritics(cleaned.artist) }
             ];
 
             for (const params of directCandidates) {
                 if (!params.track_name || !params.artist_name) continue;
                 try {
-                    const res = await this.client.get('/get', { params });
+                    const res = await this.lrclib.get('/get', { params });
                     if (res.data && (res.data.syncedLyrics || res.data.plainLyrics)) {
                         const result = this.formatResult(res.data, cleaned.track, cleaned.primaryArtist, duration);
                         this.cache.set(cacheKey, result);
                         return result;
                     }
-                } catch (e) {
-                    // Ignore 404 / error and continue to next candidate
-                }
+                } catch (e) {}
             }
 
-            // Strategy 2: Fuzzy search queries via /api/search
+            // Fuzzy queries via /api/search
             const searchCandidates = [
+                cleaned.primaryArtist,
                 `${cleaned.track} ${cleaned.primaryArtist}`.trim(),
-                `${this.stripDiacritics(cleaned.track)} ${this.stripDiacritics(cleaned.primaryArtist)}`.trim(),
                 cleaned.track,
                 this.stripDiacritics(cleaned.track)
             ];
@@ -126,23 +148,51 @@ class LyricsService {
             for (const query of searchCandidates) {
                 if (!query) continue;
                 try {
-                    const res = await this.client.get('/search', { params: { q: query } });
+                    const res = await this.lrclib.get('/search', { params: { q: query } });
                     const items = res.data || [];
                     if (items.length > 0) {
-                        const best = items.find(i => i.syncedLyrics) || items[0];
-                        if (best && (best.syncedLyrics || best.plainLyrics)) {
-                            const result = this.formatResult(best, cleaned.track, cleaned.primaryArtist, duration);
+                        // Find matching track name
+                        const cleanT = cleaned.track.toLowerCase().replace(/[^a-z0-9]/g, '');
+                        const match = items.find(i => {
+                            const iT = (i.trackName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                            return (cleanT && (iT.includes(cleanT) || cleanT.includes(iT))) && i.syncedLyrics;
+                        }) || items.find(i => i.syncedLyrics) || items[0];
+
+                        if (match && (match.syncedLyrics || match.plainLyrics)) {
+                            const result = this.formatResult(match, cleaned.track, cleaned.primaryArtist, duration);
                             this.cache.set(cacheKey, result);
                             return result;
                         }
                     }
-                } catch (e) {
-                    // Continue to next candidate
-                }
+                } catch (e) {}
             }
         } catch (err) {
-            console.error('[LyricsService] Error searching lyrics:', err.message);
+            console.error('[LyricsService] Error searching lrclib:', err.message);
         }
+
+        // Fallback: Try lyrics.ovh for plain lyrics
+        try {
+            const ovhRes = await this.lyricsOvh.get(`/${encodeURIComponent(cleaned.primaryArtist)}/${encodeURIComponent(cleaned.track)}`);
+            if (ovhRes.data && ovhRes.data.lyrics) {
+                const rawLines = ovhRes.data.lyrics.split('\n').map(l => l.trim()).filter(Boolean);
+                const dur = duration || 200;
+                const step = dur / Math.max(1, rawLines.length);
+                const lines = rawLines.map((text, idx) => ({
+                    time: Math.round(idx * step * 10) / 10,
+                    text
+                }));
+
+                const result = {
+                    found: true,
+                    synced: false,
+                    trackName: cleaned.track,
+                    artistName: cleaned.primaryArtist,
+                    lines
+                };
+                this.cache.set(cacheKey, result);
+                return result;
+            }
+        } catch (e) {}
 
         const notFoundResult = {
             found: false,
