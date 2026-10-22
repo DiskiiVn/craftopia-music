@@ -1157,6 +1157,155 @@ async function updateLyricsView(track, player) {
     await fetchAndRenderLyrics(track.title, track.artist, track.durationSeconds || 0);
 }
 
+function stripDiacriticsClient(str = '') {
+    return (str || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D');
+}
+
+function cleanTitleAndArtistClient(rawTitle = '', rawArtist = '') {
+    let t = (rawTitle || '').trim();
+    let a = (rawArtist || '').trim();
+
+    t = t.replace(/\s*[\(\[](?:official|music\s*video|audio|lyrics?|mv|hd|4k|remix|prod\.|feat\.|ft\.|visualizer|vietsub|video|nhạc\s*trẻ|m\/v)[^\)\]]*[\)\]]/gi, '').trim();
+
+    const junkRegex = /^(?:official\s*(?:music)?\s*(?:video|audio|mv|lyrics?)?|music\s*video|mv|audio|lyrics?|video\s*lyric|hd|4k|karaoke|full\s*hd|teaser|trailer|vietsub)$/i;
+
+    let detectedTrack = t;
+    let detectedArtist = a;
+
+    if (t.includes('|')) {
+        const parts = t.split(/\s*\|\s*/).map(p => p.trim()).filter(p => p && !junkRegex.test(p));
+        if (parts.length >= 2) {
+            detectedArtist = parts[0];
+            detectedTrack = parts[1];
+        } else if (parts.length === 1) {
+            detectedTrack = parts[0];
+        }
+    } else if (t.includes(' - ')) {
+        const parts = t.split(/\s+-\s+/).map(p => p.trim()).filter(p => p && !junkRegex.test(p));
+        if (parts.length >= 2) {
+            detectedArtist = parts[0];
+            detectedTrack = parts[1];
+        } else if (parts.length === 1) {
+            detectedTrack = parts[0];
+        }
+    }
+
+    detectedArtist = detectedArtist.replace(/\b(?:official|channel|vevo|topic|music)\b/gi, '').trim();
+    const primaryArtist = detectedArtist.split(/\b(?:x|feat\.?|ft\.?)\b|&|,/i)[0].trim();
+
+    return {
+        track: detectedTrack,
+        artist: detectedArtist,
+        primaryArtist: primaryArtist || detectedArtist
+    };
+}
+
+function parseLRCClient(lrcText) {
+    if (!lrcText) return [];
+    const lines = [];
+    const regex = /\[(\d{2}):(\d{2}(?:\.\d{1,3})?)\](.*)/;
+    const rawLines = lrcText.split('\n');
+
+    for (const raw of rawLines) {
+        const match = raw.match(regex);
+        if (match) {
+            const minutes = parseInt(match[1], 10);
+            const seconds = parseFloat(match[2]);
+            const time = Math.round((minutes * 60 + seconds) * 100) / 100;
+            const text = match[3].trim();
+            if (text) {
+                lines.push({ time, text });
+            }
+        }
+    }
+    return lines;
+}
+
+function formatLyricsDataClient(data, fallbackTrack, fallbackArtist, duration = 0) {
+    if (data.syncedLyrics) {
+        return {
+            found: true,
+            synced: true,
+            trackName: data.trackName || fallbackTrack,
+            artistName: data.artistName || fallbackArtist,
+            lines: parseLRCClient(data.syncedLyrics)
+        };
+    }
+    if (data.plainLyrics) {
+        const rawLines = data.plainLyrics.split('\n').map(l => l.trim()).filter(Boolean);
+        const dur = duration || data.duration || 180;
+        const step = dur / Math.max(1, rawLines.length);
+        const lines = rawLines.map((text, idx) => ({
+            time: Math.round(idx * step * 10) / 10,
+            text
+        }));
+        return {
+            found: true,
+            synced: false,
+            trackName: data.trackName || fallbackTrack,
+            artistName: data.artistName || fallbackArtist,
+            lines
+        };
+    }
+    return null;
+}
+
+async function fetchLyricsDirectFromLRCLIB(rawTitle, rawArtist = '', duration = 0) {
+    const cleaned = cleanTitleAndArtistClient(rawTitle, rawArtist);
+
+    // 1. Direct GET Candidates
+    const directCandidates = [
+        { track_name: cleaned.track, artist_name: cleaned.primaryArtist },
+        { track_name: cleaned.track, artist_name: cleaned.artist },
+        { track_name: stripDiacriticsClient(cleaned.track), artist_name: stripDiacriticsClient(cleaned.primaryArtist) },
+        { track_name: cleaned.track, artist_name: rawArtist }
+    ];
+
+    for (const params of directCandidates) {
+        if (!params.track_name || !params.artist_name) continue;
+        try {
+            const qs = new URLSearchParams(params).toString();
+            const res = await fetch(`https://lrclib.net/api/get?${qs}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data && (data.syncedLyrics || data.plainLyrics)) {
+                    return formatLyricsDataClient(data, cleaned.track, cleaned.primaryArtist, duration);
+                }
+            }
+        } catch (e) {}
+    }
+
+    // 2. Search Candidates
+    const searchCandidates = [
+        `${cleaned.track} ${cleaned.primaryArtist}`.trim(),
+        `${stripDiacriticsClient(cleaned.track)} ${stripDiacriticsClient(cleaned.primaryArtist)}`.trim(),
+        cleaned.track,
+        stripDiacriticsClient(cleaned.track)
+    ];
+
+    for (const query of searchCandidates) {
+        if (!query) continue;
+        try {
+            const res = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(query)}`);
+            if (res.ok) {
+                const items = await res.json();
+                if (Array.isArray(items) && items.length > 0) {
+                    const best = items.find(i => i.syncedLyrics) || items[0];
+                    if (best && (best.syncedLyrics || best.plainLyrics)) {
+                        return formatLyricsDataClient(best, cleaned.track, cleaned.primaryArtist, duration);
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
+    return null;
+}
+
 async function fetchAndRenderLyrics(title, artist = '', duration = 0) {
     const lyricsLinesWrap = document.getElementById('lyrics-lines-wrap');
     const lyricsModeBadge = document.getElementById('lyrics-mode-badge');
@@ -1170,6 +1319,9 @@ async function fetchAndRenderLyrics(title, artist = '', duration = 0) {
         </div>
     `;
 
+    let result = null;
+
+    // 1. Try Backend API first
     try {
         const queryParams = new URLSearchParams({
             title: title,
@@ -1178,43 +1330,53 @@ async function fetchAndRenderLyrics(title, artist = '', duration = 0) {
         });
 
         const res = await fetch(`${BACKEND_URL}/api/lyrics?${queryParams.toString()}`);
-        const data = await res.json();
-
-        if (data && data.found && data.lines && data.lines.length > 0) {
-            currentLyricsLines = data.lines;
-            currentLyricsIsSynced = data.synced;
-
-            if (lyricsModeBadge) {
-                lyricsModeBadge.textContent = data.synced ? 'KARAOKE SYNCED' : 'FULL LYRICS';
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.found && data.lines && data.lines.length > 0) {
+                result = data;
             }
-
-            lyricsLinesWrap.innerHTML = currentLyricsLines.map((line, idx) => `
-                <div class="lyric-line" id="lyric-line-${idx}" data-time="${line.time}" onclick="sendControl('seek', ${Math.floor(line.time)})">
-                    <span class="lyric-text">${escapeHtml(line.text)}</span>
-                    <span class="lyric-time-badge">${formatDuration(Math.floor(line.time))}</span>
-                </div>
-            `).join('');
-
-            // Immediately highlight current line
-            syncLyricsScroll(currentSeconds);
-        } else {
-            currentLyricsLines = [];
-            lyricsLinesWrap.innerHTML = `
-                <div class="lyrics-empty-state">
-                    <div class="lyrics-musical-note">🎶</div>
-                    <p>Chưa có dữ liệu lời bài hát đồng bộ cho bài này</p>
-                    <span style="display:block; margin: 8px 0 16px; color:var(--text-muted);">"${escapeHtml(title)}"</span>
-                    <button class="btn-pill" onclick="promptSearchLyrics()">🔍 Tìm kiếm lời bài hát thủ công</button>
-                </div>
-            `;
         }
     } catch (err) {
-        console.error('[Lyrics Error]:', err);
+        console.warn('[Backend /api/lyrics unavailable, falling back to direct client search]:', err.message);
+    }
+
+    // 2. If Backend did not return lyrics, fallback to Direct Client LRCLIB fetch
+    if (!result || !result.lines || result.lines.length === 0) {
+        try {
+            result = await fetchLyricsDirectFromLRCLIB(title, artist, duration);
+        } catch (err) {
+            console.error('[Direct LRCLIB search error]:', err);
+        }
+    }
+
+    if (result && result.lines && result.lines.length > 0) {
+        currentLyricsLines = result.lines;
+        currentLyricsIsSynced = result.synced;
+
+        if (lyricsModeBadge) {
+            lyricsModeBadge.textContent = result.synced ? 'KARAOKE SYNCED' : 'FULL LYRICS';
+        }
+
+        lyricsLinesWrap.innerHTML = currentLyricsLines.map((line, idx) => `
+            <div class="lyric-line" id="lyric-line-${idx}" data-time="${line.time}" onclick="sendControl('seek', ${Math.floor(line.time)})">
+                <span class="lyric-text">${escapeHtml(line.text)}</span>
+                <span class="lyric-time-badge">${formatDuration(Math.floor(line.time))}</span>
+            </div>
+        `).join('');
+
+        // Immediately highlight current line
+        syncLyricsScroll(currentSeconds);
+    } else {
+        currentLyricsLines = [];
         lyricsLinesWrap.innerHTML = `
             <div class="lyrics-empty-state">
-                <div class="lyrics-musical-note">⚠️</div>
-                <p>Không thể kết nối đến máy chủ lời bài hát</p>
-                <button class="btn-pill" style="margin-top:14px;" onclick="lastTrackUrlForLyrics=''; updateLyricsView(currentPlayerData?.currentTrack, currentPlayerData)">Thử lại</button>
+                <div class="lyrics-musical-note">🎶</div>
+                <p>Chưa có dữ liệu lời bài hát đồng bộ cho bài này</p>
+                <span style="display:block; margin: 8px 0 16px; color:var(--text-muted); font-size:13px;">"${escapeHtml(title)}"</span>
+                <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+                    <button class="btn-pill" onclick="promptSearchLyrics()">🔍 Tìm kiếm lời bài hát khác</button>
+                    <button class="btn-pill" onclick="lastTrackUrlForLyrics=''; updateLyricsView(currentPlayerData?.currentTrack, currentPlayerData)">🔄 Thử tìm lại</button>
+                </div>
             </div>
         `;
     }
