@@ -6,12 +6,20 @@
       "destination": "http://160.187.146.180:25610/health"
     },
     {
-      "source": "/api/:path*",
-      "destination": "http://160.187.146.180:25610/api/:path*"
+      "source": "/api",
+      "destination": "http://160.187.146.180:25610/api"
     },
     {
-      "source": "/socket.io/:path*",
-      "destination": "http://160.187.146.180:25610/socket.io/:path*"
+      "source": "/api/(.*)",
+      "destination": "http://160.187.146.180:25610/api/$1"
+    },
+    {
+      "source": "/socket.io",
+      "destination": "http://160.187.146.180:25610/socket.io/"
+    },
+    {
+      "source": "/socket.io/(.*)",
+      "destination": "http://160.187.146.180:25610/socket.io/$1"
     }
   ]
 }
