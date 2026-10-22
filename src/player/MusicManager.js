@@ -168,6 +168,7 @@ class GuildPlayer extends EventEmitter {
     async playTrack(track, seekSeconds = 0) {
         try {
             this.currentTrack = track;
+            this.seekOffset = seekSeconds || 0;
             this.playbackStartTime = Date.now() - (seekSeconds * 1000);
             this.pausedDuration = 0;
             this.pauseStartTime = 0;
@@ -210,6 +211,11 @@ class GuildPlayer extends EventEmitter {
 
     getPlaybackDuration() {
         if (!this.currentTrack) return 0;
+        // Prioritize actual Opus playbackDuration from @discordjs/voice AudioResource for exact audio sync
+        if (this.resource && typeof this.resource.playbackDuration === 'number' && this.resource.playbackDuration > 0) {
+            const seekOffset = this.seekOffset || 0;
+            return Math.max(0, Math.floor((this.resource.playbackDuration / 1000) + seekOffset));
+        }
         if (this.isPaused) {
             return Math.max(0, Math.floor((this.pauseStartTime - this.playbackStartTime - this.pausedDuration) / 1000));
         }

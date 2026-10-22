@@ -104,7 +104,7 @@ class LyricsService {
             }
         }
 
-        return lines;
+        return lines.sort((a, b) => a.time - b.time);
     }
 
     async getLyrics(rawTitle, rawArtist = '', duration = 0) {

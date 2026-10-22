@@ -565,6 +565,9 @@ socket.on('player_update', (data) => {
 
 socket.on('tick', (data) => {
     if (data.guildId === currentGuildId && !isSeeking) {
+        lastServerSeconds = data.currentSeconds;
+        lastTickTime = performance.now();
+        isTrackPlaying = !data.isPaused;
         currentSeconds = data.currentSeconds;
         currentDuration = data.durationSeconds;
         seekCurrent.textContent = data.currentFormatted;
@@ -581,6 +584,22 @@ socket.on('tick', (data) => {
         syncLyricsScroll(currentSeconds);
     }
 });
+
+// High-Frequency Smooth Clock (every 60ms) for pixel-perfect lyrics & progress sync
+setInterval(() => {
+    if (!isTrackPlaying || isSeeking || currentDuration <= 0 || lastTickTime === 0) return;
+    const elapsed = (performance.now() - lastTickTime) / 1000;
+    // Don't interpolate beyond 2.5s to avoid drifting if server stops emitting
+    if (elapsed > 2.5) return;
+    const interpolated = Math.min(currentDuration, lastServerSeconds + elapsed);
+    syncLyricsScroll(interpolated);
+
+    const pct = Math.min(100, Math.max(0, (interpolated / currentDuration) * 100));
+    seekProgress.style.width = `${pct}%`;
+    seekThumb.style.left = `${pct}%`;
+    const mobileMiniFill = document.getElementById('mobile-mini-fill');
+    if (mobileMiniFill) mobileMiniFill.style.width = `${pct}%`;
+}, 60);
 
 // --- Update UI with Player State ---
 function updatePlayerUI(player) {
@@ -1070,6 +1089,10 @@ let currentLyricsLines = [];
 let lastTrackUrlForLyrics = '';
 let isFetchingLyrics = false;
 let currentLyricsIsSynced = true;
+let lyricsSyncOffset = parseFloat(localStorage.getItem('craftopia_lyrics_offset') || '0') || 0;
+let lastServerSeconds = 0;
+let lastTickTime = 0;
+let isTrackPlaying = false;
 
 function setupLyricsView() {
     const btnBarLyrics = document.getElementById('btn-bar-lyrics');
@@ -1092,6 +1115,45 @@ function setupLyricsView() {
             }).catch(() => {
                 showToast('Đã sao chép lời bài hát!', '📋');
             });
+        });
+    }
+
+    // Lyrics Calibration Controls (-0.5s / 0.0s / +0.5s)
+    const syncOffsetVal = document.getElementById('sync-offset-val');
+    const btnSyncMinus = document.getElementById('btn-sync-minus');
+    const btnSyncPlus = document.getElementById('btn-sync-plus');
+
+    const updateOffsetDisplay = () => {
+        if (syncOffsetVal) {
+            const sign = lyricsSyncOffset > 0 ? '+' : '';
+            syncOffsetVal.textContent = `${sign}${lyricsSyncOffset.toFixed(1)}s`;
+        }
+        localStorage.setItem('craftopia_lyrics_offset', lyricsSyncOffset.toString());
+        syncLyricsScroll(currentSeconds);
+    };
+    updateOffsetDisplay();
+
+    if (btnSyncMinus) {
+        btnSyncMinus.addEventListener('click', () => {
+            lyricsSyncOffset = Math.round((lyricsSyncOffset - 0.5) * 10) / 10;
+            updateOffsetDisplay();
+            showToast(`Căn chỉnh lời: ${lyricsSyncOffset > 0 ? '+' : ''}${lyricsSyncOffset.toFixed(1)}s (Lời chạy sớm hơn)`, '⚡');
+        });
+    }
+
+    if (btnSyncPlus) {
+        btnSyncPlus.addEventListener('click', () => {
+            lyricsSyncOffset = Math.round((lyricsSyncOffset + 0.5) * 10) / 10;
+            updateOffsetDisplay();
+            showToast(`Căn chỉnh lời: +${lyricsSyncOffset.toFixed(1)}s (Lời chạy trễ lại)`, '⏱️');
+        });
+    }
+
+    if (syncOffsetVal) {
+        syncOffsetVal.addEventListener('click', () => {
+            lyricsSyncOffset = 0;
+            updateOffsetDisplay();
+            showToast('Đã đặt lại đồng bộ lời về 0.0s', '🔄');
         });
     }
 
@@ -1244,7 +1306,7 @@ function parseLRCClient(lrcText) {
             }
         }
     }
-    return lines;
+    return lines.sort((a, b) => a.time - b.time);
 }
 
 function formatLyricsDataClient(data, fallbackTrack, fallbackArtist, duration = 0) {
@@ -1445,10 +1507,13 @@ function escapeHtml(text) {
 function syncLyricsScroll(sec) {
     if (!currentLyricsLines || currentLyricsLines.length === 0) return;
     const viewport = document.getElementById('lyrics-viewport');
+    
+    // Apply user-calibrated offset (effectiveSec = sec + lyricsSyncOffset)
+    const effectiveSec = Math.max(0, sec + (lyricsSyncOffset || 0));
     let activeIdx = -1;
 
     for (let i = 0; i < currentLyricsLines.length; i++) {
-        if (sec >= currentLyricsLines[i].time) {
+        if (effectiveSec >= currentLyricsLines[i].time) {
             activeIdx = i;
         } else {
             break;
@@ -1463,8 +1528,7 @@ function syncLyricsScroll(sec) {
                 el.classList.add('active');
                 el.classList.remove('past');
                 if (viewport) {
-                    const targetScroll = el.offsetTop - (viewport.clientHeight / 2) + (el.clientHeight / 2);
-                    viewport.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
             }
         } else if (idx < activeIdx) {

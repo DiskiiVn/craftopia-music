@@ -3231,6 +3231,68 @@ kbd {
     gap: 12px;
 }
 
+.lyrics-sync-controls {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--radius-full);
+    padding: 3px 6px;
+    gap: 5px;
+    transition: all 0.2s var(--ease-out);
+}
+
+.lyrics-sync-controls:hover {
+    border-color: rgba(16, 185, 129, 0.4);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.sync-title {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    padding-left: 6px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.btn-sync-offset {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--text-secondary);
+    border-radius: 999px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s var(--ease-out);
+}
+
+.btn-sync-offset:hover {
+    background: var(--primary);
+    color: #050608;
+    border-color: var(--primary);
+    transform: scale(1.06);
+}
+
+.sync-offset-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--primary-light);
+    min-width: 40px;
+    text-align: center;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.sync-offset-label:hover {
+    background: rgba(255, 255, 255, 0.12);
+    text-decoration: underline;
+}
+
 .lyrics-search-mini {
     display: flex;
     align-items: center;

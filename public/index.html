@@ -428,6 +428,12 @@
                                 </div>
                             </div>
                             <div class="lyrics-actions">
+                                <div class="lyrics-sync-controls" title="Căn chỉnh độ trễ đồng bộ lời bài hát">
+                                    <span class="sync-title">LỆCH:</span>
+                                    <button class="btn-sync-offset" id="btn-sync-minus" title="Lời chạy nhanh hơn nhạc (giảm 0.5s)">-0.5s</button>
+                                    <span class="sync-offset-label" id="sync-offset-val" title="Bấm để đặt lại 0.0s">0.0s</span>
+                                    <button class="btn-sync-offset" id="btn-sync-plus" title="Lời chạy chậm hơn nhạc (tăng 0.5s)">+0.5s</button>
+                                </div>
                                 <div class="lyrics-search-mini">
                                     <input type="text" id="lyrics-search-input" placeholder="Tìm lời bài hát khác..." autocomplete="off">
                                     <button class="btn-lyrics-search" id="btn-lyrics-search" title="Tìm lời bài hát">🔍</button>
@@ -793,6 +799,6 @@
 
     <!-- Scripts -->
     <script src="/socket.io/socket.io.js"></script>
-    <script src="js/app.js?v=2.3.0"></script>
+    <script src="js/app.js?v=2.4.0"></script>
 </body>
 </html>

@@ -472,6 +472,7 @@ class WebServer {
                         guildId: player.guildId,
                         voiceChannelId: player.voiceChannelId,
                         botIndex: player.botIndex,
+                        isPaused: player.isPaused,
                         currentSeconds,
                         durationSeconds,
                         progressPercent,
