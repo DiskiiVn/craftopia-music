@@ -32,6 +32,7 @@ class WebServer {
     }
 
     setupMiddleware() {
+        this.app.set('trust proxy', 1);
         this.app.use(cors({
             origin: true,
             credentials: true
@@ -41,10 +42,10 @@ class WebServer {
         this.app.use(session({
             secret: config.sessionSecret,
             resave: false,
-            saveUninitialized: true,
+            saveUninitialized: false,
             cookie: {
                 maxAge: 7 * 24 * 60 * 60 * 1000,
-                secure: process.env.NODE_ENV === 'production',
+                secure: false,
                 sameSite: 'lax'
             }
         }));

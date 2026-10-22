@@ -1,10 +1,9 @@
 // Craftopia Music Dashboard Client
-const BACKEND_URL = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-    ? ''
-    : (localStorage.getItem('craftopia_backend_url') || 'https://craftopia-music.onrender.com');
+const savedBackend = localStorage.getItem('craftopia_backend_url');
+const BACKEND_URL = (savedBackend && !savedBackend.includes('onrender.com')) ? savedBackend : '';
 
 const socket = io(BACKEND_URL, {
-    transports: ['websocket', 'polling']
+    transports: ['polling', 'websocket']
 });
 
 // State

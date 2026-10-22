@@ -1,3 +1,17 @@
 {
-  "outputDirectory": "public"
+  "outputDirectory": "public",
+  "rewrites": [
+    {
+      "source": "/health",
+      "destination": "http://160.187.146.180:25610/health"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "http://160.187.146.180:25610/api/:path*"
+    },
+    {
+      "source": "/socket.io/:path*",
+      "destination": "http://160.187.146.180:25610/socket.io/:path*"
+    }
+  ]
 }
