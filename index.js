@@ -1,6 +1,7 @@
+const fs = require('fs');
 try {
     const ffmpegPath = require('ffmpeg-static');
-    if (ffmpegPath) {
+    if (ffmpegPath && fs.existsSync(ffmpegPath)) {
         process.env.FFMPEG_PATH = ffmpegPath;
     }
 } catch (e) {}
