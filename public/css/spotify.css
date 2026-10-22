@@ -2103,6 +2103,154 @@ body {
 }
 
 /* ====================================================
+   DISCORD LOGIN GATE
+   ==================================================== */
+.login-gate {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: radial-gradient(circle at center, rgba(16, 21, 35, 0.97) 0%, rgba(6, 7, 10, 0.99) 100%);
+    backdrop-filter: blur(28px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    animation: fadeIn 0.4s var(--ease-out);
+}
+
+.login-gate.hidden {
+    display: none !important;
+}
+
+.login-gate-card {
+    background: linear-gradient(135deg, rgba(22, 28, 44, 0.9) 0%, rgba(13, 16, 26, 0.98) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--radius-xl);
+    padding: 44px 38px;
+    max-width: 480px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    position: relative;
+    overflow: hidden;
+}
+
+.login-gate-card::before {
+    content: '';
+    position: absolute;
+    top: -50px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 260px;
+    height: 130px;
+    background: radial-gradient(ellipse, rgba(88, 101, 242, 0.35) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+.login-brand-icon {
+    width: 70px;
+    height: 70px;
+    border-radius: var(--radius-lg);
+    background: linear-gradient(135deg, #5865F2 0%, #10b981 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    box-shadow: 0 12px 30px rgba(88, 101, 242, 0.45);
+    margin-bottom: 6px;
+}
+
+.login-title {
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: -0.8px;
+    background: linear-gradient(90deg, #ffffff 0%, #cbd5e1 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.login-sub {
+    font-size: 13.5px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 8px;
+}
+
+.login-feature-list {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    text-align: left;
+    margin: 8px 0 14px 0;
+}
+
+.login-feature-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-glass);
+    padding: 12px 16px;
+    border-radius: var(--radius-md);
+}
+
+.login-feature-item .feature-icon {
+    font-size: 20px;
+    line-height: 1;
+    margin-top: 2px;
+}
+
+.login-feature-item strong {
+    font-size: 13px;
+    color: #fff;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.login-feature-item p {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    line-height: 1.4;
+    margin: 0;
+}
+
+.btn-discord-login {
+    width: 100%;
+    padding: 16px 24px;
+    border-radius: var(--radius-full);
+    background: linear-gradient(135deg, #5865F2 0%, #4752c4 100%);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    text-decoration: none;
+    box-shadow: 0 10px 30px rgba(88, 101, 242, 0.45);
+    transition: all 0.25s var(--ease-spring);
+    cursor: pointer;
+    border: none;
+}
+
+.btn-discord-login:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 14px 38px rgba(88, 101, 242, 0.65);
+    background: linear-gradient(135deg, #6775f5 0%, #4752c4 100%);
+}
+
+.login-footer-note {
+    font-size: 11.5px;
+    color: var(--text-dim);
+    margin-top: 4px;
+}
+
+/* ====================================================
    RESPONSIVE DESIGN
    ==================================================== */
 @media (max-width: 900px) {

@@ -210,21 +210,21 @@ window.playSongByIndex = async (index) => {
     }
 
     try {
-        showToast(`Đang gửi yêu cầu phát: ${song.title}...`, '⏳');
+        showToast(`🔍 Đang quét phòng voice của bạn và phát: ${song.title}...`, '⏳');
         const res = await fetch(`${BACKEND_URL}/api/guilds/${currentGuildId}/play`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                trackData: song,
-                voiceChannelId: voiceChannelSelect?.value || null
+                trackData: song
             })
         });
         const data = await res.json();
-        if (data.success && data.result) {
+        if (data.success) {
             switchTab('tab-home');
-            showToast(`Đang phát: ${song.title}`, '▶️');
+            const vName = data.voiceChannel ? data.voiceChannel.name : 'voice';
+            showToast(`✅ Đã vào [${vName}] & đang phát: ${song.title}`, '▶️');
         } else {
-            showToast(`Lỗi: ${data.error || 'Không thể phát bài'}`, '❌');
+            showToast(data.error || 'Không thể phát bài', '⚠️');
         }
     } catch (err) {
         showToast('Lỗi khi phát bài: ' + err.message, '❌');
@@ -267,7 +267,7 @@ window.playTrendingSong = async (query, title) => {
         showToast('Vui lòng chọn Server Discord trước khi phát bài!', '⚠️');
         return;
     }
-    showToast(`Đang tìm kiếm: ${title}...`, '⏳');
+    showToast(`🔍 Đang tìm kiếm: ${title}...`, '⏳');
     try {
         const res = await fetch(`${BACKEND_URL}/api/search?q=${encodeURIComponent(query)}`);
         const data = await res.json();
@@ -276,21 +276,21 @@ window.playTrendingSong = async (query, title) => {
             showToast('Không tìm thấy bài hát trên YouTube!', '❌');
             return;
         }
-        showToast(`Đang gửi yêu cầu phát: ${first.title}...`, '⏳');
+        showToast(`🔍 Đang quét phòng voice của bạn và phát: ${first.title}...`, '⏳');
         const playRes = await fetch(`${BACKEND_URL}/api/guilds/${currentGuildId}/play`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                trackData: first,
-                voiceChannelId: voiceChannelSelect?.value || null
+                trackData: first
             })
         });
         const playData = await playRes.json();
         if (playData.success) {
             switchTab('tab-home');
-            showToast(`Đang phát: ${first.title}`, '▶️');
+            const vName = playData.voiceChannel ? playData.voiceChannel.name : 'voice';
+            showToast(`✅ Đã vào [${vName}] & đang phát: ${first.title}`, '▶️');
         } else {
-            showToast(`Lỗi: ${playData.error || 'Không thể phát'}`, '❌');
+            showToast(playData.error || 'Không thể phát bài', '⚠️');
         }
     } catch (err) {
         showToast('Lỗi khi phát bài: ' + err.message, '❌');
@@ -319,7 +319,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     await checkAuth();
-    await loadGuilds();
 
     // Check URL guild query param
     const urlParams = new URLSearchParams(window.location.search);
@@ -362,19 +361,32 @@ function switchTab(tabId) {
     });
 }
 
-// --- Auth Check ---
+// --- Auth Check & Login Gate ---
 async function checkAuth() {
     try {
         const res = await fetch(`${BACKEND_URL}/api/auth/me`);
         const data = await res.json();
-        if (data && data.user) {
+        const loginGate = document.getElementById('login-gate');
+
+        if (data && data.loggedIn && data.user) {
+            // Đã đăng nhập Discord -> Ẩn Login Gate, hiển thị Dashboard
+            if (loginGate) loginGate.classList.add('hidden');
             userName.textContent = data.user.username;
             if (data.user.avatar) userAvatar.src = data.user.avatar;
-            if (!data.loggedIn) {
-                userBadgeBtn.addEventListener('click', () => {
-                    window.location.href = `${BACKEND_URL}/api/auth/login`;
-                });
-            }
+            userBadgeBtn.title = `Tài khoản: ${data.user.username} (Click để Đăng xuất)`;
+            
+            // Đăng xuất khi click vào badge user
+            userBadgeBtn.onclick = async () => {
+                if (confirm(`Bạn có muốn đăng xuất khỏi tài khoản "${data.user.username}" không?`)) {
+                    await fetch(`${BACKEND_URL}/api/auth/logout`);
+                    window.location.reload();
+                }
+            };
+
+            await loadGuilds();
+        } else {
+            // Chưa đăng nhập -> Hiện Login Gate chặn toàn bộ màn hình
+            if (loginGate) loginGate.classList.remove('hidden');
         }
     } catch (err) {
         console.error('Lỗi kiểm tra auth:', err);

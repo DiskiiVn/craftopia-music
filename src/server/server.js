@@ -107,13 +107,24 @@ class WebServer {
                     headers: { Authorization: `Bearer ${accessToken}` }
                 });
 
+                let userGuildIds = [];
+                try {
+                    const guildsRes = await axios.get('https://discord.com/api/users/@me/guilds', {
+                        headers: { Authorization: `Bearer ${accessToken}` }
+                    });
+                    userGuildIds = guildsRes.data.map(g => g.id);
+                } catch (gErr) {
+                    console.warn('[OAuth2 Guilds fetch notice]:', gErr.message);
+                }
+
                 req.session.user = {
                     id: userRes.data.id,
-                    username: userRes.data.username,
+                    username: userRes.data.global_name || userRes.data.username,
                     avatar: userRes.data.avatar 
                         ? `https://cdn.discordapp.com/avatars/${userRes.data.id}/${userRes.data.avatar}.png` 
                         : 'https://cdn.discordapp.com/embed/avatars/0.png'
                 };
+                req.session.userGuildIds = userGuildIds;
 
                 res.redirect('/');
             } catch (err) {
@@ -123,16 +134,12 @@ class WebServer {
         });
 
         this.app.get('/api/auth/me', (req, res) => {
-            if (req.session.user) {
+            if (req.session.user && req.session.user.id && req.session.user.id !== 'dashboard') {
                 return res.json({ loggedIn: true, user: req.session.user });
             }
             res.json({
                 loggedIn: false,
-                user: {
-                    id: 'dashboard',
-                    username: 'Khách (Dashboard)',
-                    avatar: 'https://cdn.discordapp.com/embed/avatars/0.png'
-                }
+                user: null
             });
         });
 
@@ -144,11 +151,21 @@ class WebServer {
 
         // --- Guilds API ---
         this.app.get('/api/guilds', (req, res) => {
+            if (!req.session.user || !req.session.user.id || req.session.user.id === 'dashboard') {
+                return res.status(401).json({ error: 'Vui lòng đăng nhập Discord để sử dụng!', loggedIn: false });
+            }
+
             if (!bot.client.isReady()) {
                 return res.json({ guilds: [] });
             }
 
-            const guilds = bot.client.guilds.cache.map(g => ({
+            const userGuildIds = req.session.userGuildIds || [];
+            let matchingGuilds = bot.client.guilds.cache;
+            if (userGuildIds.length > 0) {
+                matchingGuilds = matchingGuilds.filter(g => userGuildIds.includes(g.id));
+            }
+
+            const guilds = matchingGuilds.map(g => ({
                 id: g.id,
                 name: g.name,
                 icon: g.iconURL() || 'https://cdn.discordapp.com/embed/avatars/0.png',
@@ -231,41 +248,50 @@ class WebServer {
         });
 
         this.app.post('/api/guilds/:id/play', async (req, res) => {
-            const guildId = req.params.id;
-            const { query, voiceChannelId, trackData } = req.body;
-            const guild = bot.client.guilds.cache.get(guildId);
-            if (!guild) return res.status(404).json({ error: 'Server không tìm thấy!' });
+            if (!req.session.user || !req.session.user.id || req.session.user.id === 'dashboard') {
+                return res.status(401).json({ error: 'Vui lòng đăng nhập Discord để sử dụng!', loggedIn: false });
+            }
 
-            let player = musicManager.getPlayer(guildId);
+            const guildId = req.params.id;
+            const userId = req.session.user.id;
+            const { query, trackData } = req.body;
+
+            const guild = bot.client.guilds.cache.get(guildId);
+            if (!guild) return res.status(404).json({ error: 'Server không tìm thấy trên bot!' });
+
+            // 1. Tự động quét kênh thoại người dùng đang tham gia
             let targetVoice = null;
 
-            if (voiceChannelId) {
-                targetVoice = guild.channels.cache.get(voiceChannelId);
+            // Kiểm tra trong voiceStates cache trước
+            const voiceState = guild.voiceStates.cache.get(userId);
+            if (voiceState && voiceState.channel) {
+                targetVoice = voiceState.channel;
             }
-            if (!targetVoice && player && player.voiceChannelId) {
-                targetVoice = guild.channels.cache.get(player.voiceChannelId);
-            }
-            if (!targetVoice && req.session.user && req.session.user.id) {
-                const member = guild.members.cache.get(req.session.user.id);
+
+            // Nếu chưa có trong cache, fetch member từ Discord API để có voice state tức thời
+            if (!targetVoice) {
+                const member = await guild.members.fetch(userId).catch(() => null);
                 if (member && member.voice && member.voice.channel) {
                     targetVoice = member.voice.channel;
                 }
             }
+
+            // 2. Nếu người dùng chưa vào bất kỳ phòng voice nào trong Server này:
             if (!targetVoice) {
-                const voiceChannels = guild.channels.cache.filter(c => c.isVoiceBased());
-                const withHumans = voiceChannels.find(c => c.members.some(m => !m.user.bot));
-                targetVoice = withHumans || voiceChannels.find(c => c.members.size > 0) || voiceChannels.first();
+                return res.status(400).json({
+                    error: `Bạn chưa vào phòng voice nào trong Server "${guild.name}"! Vui lòng vào 1 phòng voice trên Discord rồi nhấn phát lại nhé.`
+                });
             }
 
-            if (!targetVoice) {
-                return res.status(400).json({ error: 'Không tìm thấy kênh voice nào trong server để phát nhạc!' });
+            // Kiểm tra quyền của bot trong kênh thoại
+            const permissions = targetVoice.permissionsFor(bot.client.user);
+            if (permissions && (!permissions.has('Connect') || !permissions.has('Speak'))) {
+                return res.status(403).json({
+                    error: `Bot không có quyền Tham gia hoặc Nói trong kênh thoại "${targetVoice.name}"!`
+                });
             }
 
-            const user = req.session.user || {
-                id: 'dashboard',
-                username: 'Web Dashboard',
-                avatar: null
-            };
+            const user = req.session.user;
 
             try {
                 const result = await musicManager.enqueue(
@@ -274,7 +300,14 @@ class WebServer {
                     trackData || query,
                     user
                 );
-                res.json({ success: true, result });
+                res.json({
+                    success: true,
+                    result,
+                    voiceChannel: {
+                        id: targetVoice.id,
+                        name: targetVoice.name
+                    }
+                });
             } catch (err) {
                 console.error('[Play Error]:', err.message);
                 res.status(500).json({ error: err.message });
@@ -282,6 +315,10 @@ class WebServer {
         });
 
         this.app.post('/api/guilds/:id/control', (req, res) => {
+            if (!req.session.user || !req.session.user.id || req.session.user.id === 'dashboard') {
+                return res.status(401).json({ error: 'Vui lòng đăng nhập Discord để sử dụng!', loggedIn: false });
+            }
+
             const guildId = req.params.id;
             const { action, value } = req.body;
             const player = musicManager.getPlayer(guildId);
