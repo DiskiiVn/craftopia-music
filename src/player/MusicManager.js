@@ -169,6 +169,7 @@ class GuildPlayer extends EventEmitter {
             this.manager.emit('trackStart', {
                 guildId: this.guildId,
                 track,
+                voiceChannelId: this.voiceChannelId,
                 textChannelId: this.textChannelId
             });
         } catch (error) {
@@ -437,6 +438,13 @@ class MusicManager extends EventEmitter {
         } else {
             player.queue.push(track);
             this.emitUpdate(guildId);
+            this.emit('trackAdd', {
+                guildId,
+                track,
+                position: player.queue.length,
+                voiceChannelId: player.voiceChannelId,
+                textChannelId: player.textChannelId
+            });
             return { type: 'queued', track, position: player.queue.length, player };
         }
     }

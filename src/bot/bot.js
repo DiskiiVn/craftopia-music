@@ -63,21 +63,88 @@ class DiscordMusicBot {
             }
         });
 
-        // Track Start Notifications in Text Channel
-        musicManager.on('trackStart', async ({ guildId, track, textChannelId }) => {
-            if (!textChannelId) return;
+        // Track Start Notifications directly into Voice Channel Text Chat
+        musicManager.on('trackStart', async ({ guildId, track, voiceChannelId, textChannelId }) => {
             try {
-                const channel = await this.client.channels.fetch(textChannelId).catch(() => null);
+                const player = musicManager.getPlayer(guildId);
+                const targetChannelId = voiceChannelId || player?.voiceChannelId || textChannelId;
+                if (!targetChannelId) return;
+
+                let channel = await this.client.channels.fetch(targetChannelId).catch(() => null);
+                if (!channel || !channel.isTextBased()) {
+                    if (textChannelId && textChannelId !== targetChannelId) {
+                        channel = await this.client.channels.fetch(textChannelId).catch(() => null);
+                    }
+                }
                 if (!channel || !channel.isTextBased()) return;
+
+                if (channel.guild) {
+                    const permissions = channel.permissionsFor(this.client.user);
+                    if (permissions && (!permissions.has('ViewChannel') || !permissions.has('SendMessages'))) {
+                        return;
+                    }
+                }
+
+                // Format requester: tag user if has Discord ID
+                const requesterText = (track.requestedBy?.id && track.requestedBy.id !== 'dashboard')
+                    ? `<@${track.requestedBy.id}>`
+                    : (track.requestedBy?.username || 'Web Dashboard');
+
+                // Upcoming queue list preview
+                const upcomingQueue = player?.queue || [];
+                let queueFieldText = '*(Hàng đợi hiện đang trống)*';
+                if (upcomingQueue.length > 0) {
+                    const queueLines = upcomingQueue.slice(0, 3).map((t, idx) => {
+                        const tReq = (t.requestedBy?.id && t.requestedBy.id !== 'dashboard')
+                            ? `<@${t.requestedBy.id}>`
+                            : (t.requestedBy?.username || 'Web');
+                        return `\`#${idx + 1}\` [${t.title}](${t.url}) - \`${t.durationFormatted}\` (bởi ${tReq})`;
+                    });
+                    queueFieldText = queueLines.join('\n');
+                    if (upcomingQueue.length > 3) {
+                        queueFieldText += `\n*...và còn **${upcomingQueue.length - 3}** bài hát nữa trong hàng đợi*`;
+                    }
+                }
+
+                const voiceName = player?.voiceChannelName || (channel.isVoiceBased() ? channel.name : 'Voice Channel');
 
                 const embed = new EmbedBuilder()
                     .setColor(BRAND_COLOR)
-                    .setAuthor({ name: 'CRAFTOPIA MUSIC', iconURL: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&h=100&fit=crop' })
-                    .setTitle(track.title)
+                    .setAuthor({
+                        name: 'ĐANG PHÁT TRONG PHÒNG VOICE 🔊',
+                        iconURL: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&h=100&fit=crop'
+                    })
+                    .setTitle(`🎵 ${track.title}`)
                     .setURL(track.url)
-                    .setDescription(`**Nghệ sĩ:** ${track.artist}\n**Thời lượng:** \`${track.durationFormatted}\`\n**Yêu cầu bởi:** ${track.requestedBy ? track.requestedBy.username : 'Web Dashboard'}`)
+                    .setDescription(`**Nghệ sĩ:** ${track.artist}\n**Thời lượng:** \`${track.durationFormatted}\``)
+                    .addFields(
+                        {
+                            name: '👤 Người chọn bài',
+                            value: requesterText,
+                            inline: true
+                        },
+                        {
+                            name: '🔊 Phòng thoại',
+                            value: `\`${voiceName}\``,
+                            inline: true
+                        },
+                        {
+                            name: '🎚️ Âm lượng',
+                            value: `\`${player?.volume || 80}%\``,
+                            inline: true
+                        },
+                        {
+                            name: `📋 Hàng đợi tiếp theo (${upcomingQueue.length} bài chờ)`,
+                            value: queueFieldText,
+                            inline: false
+                        }
+                    )
                     .setThumbnail(track.thumbnail)
-                    .setFooter({ text: 'Dùng /dashboard hoặc vào music.craftopics.online để điều khiển' });
+                    .setFooter({
+                        text: `Craftopia Music • Tự động đồng bộ với Dashboard (${config.domain})`,
+                        iconURL: 'https://cdn.discordapp.com/embed/avatars/0.png'
+                    })
+                    .setTimestamp();
 
                 const dashboardUrl = `${config.domain}?guild=${guildId}`;
                 const row = new ActionRowBuilder().addComponents(
@@ -93,19 +160,64 @@ class DiscordMusicBot {
                         .setEmoji('⏭️'),
                     new ButtonBuilder()
                         .setCustomId(`btn_loop_${guildId}`)
-                        .setLabel('Lặp')
+                        .setLabel('Lặp bài')
                         .setStyle(ButtonStyle.Secondary)
                         .setEmoji('🔁'),
                     new ButtonBuilder()
                         .setLabel('Mở Web Dashboard')
                         .setStyle(ButtonStyle.Link)
                         .setURL(dashboardUrl)
-                        .setEmoji('🎧')
+                        .setEmoji('🌐')
                 );
 
                 await channel.send({ embeds: [embed], components: [row] });
             } catch (err) {
-                console.error('[Craftopia Music] Lỗi gửi thông báo bài hát:', err.message);
+                console.error('[Craftopia Music] Lỗi gửi thông báo trackStart vào voice:', err.message);
+            }
+        });
+
+        // Track Added to Queue Notification in Voice Channel Text Chat
+        musicManager.on('trackAdd', async ({ guildId, track, position, voiceChannelId, textChannelId }) => {
+            try {
+                const player = musicManager.getPlayer(guildId);
+                const targetChannelId = voiceChannelId || player?.voiceChannelId || textChannelId;
+                if (!targetChannelId) return;
+
+                let channel = await this.client.channels.fetch(targetChannelId).catch(() => null);
+                if (!channel || !channel.isTextBased()) return;
+
+                if (channel.guild) {
+                    const permissions = channel.permissionsFor(this.client.user);
+                    if (permissions && (!permissions.has('ViewChannel') || !permissions.has('SendMessages'))) {
+                        return;
+                    }
+                }
+
+                const requesterText = (track.requestedBy?.id && track.requestedBy.id !== 'dashboard')
+                    ? `<@${track.requestedBy.id}>`
+                    : (track.requestedBy?.username || 'Web Dashboard');
+
+                const embed = new EmbedBuilder()
+                    .setColor(0x06B6D4)
+                    .setAuthor({
+                        name: 'ĐÃ THÊM VÀO HÀNG ĐỢI ➕',
+                        iconURL: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&h=100&fit=crop'
+                    })
+                    .setTitle(`➕ ${track.title}`)
+                    .setURL(track.url)
+                    .setDescription(`**Nghệ sĩ:** ${track.artist}\n**Thời lượng:** \`${track.durationFormatted}\``)
+                    .addFields(
+                        { name: '👤 Người chọn bài', value: requesterText, inline: true },
+                        { name: '🔢 Vị trí trong hàng đợi', value: `\`#${position}\``, inline: true },
+                        { name: '📋 Tổng số bài đang chờ', value: `\`${player?.queue?.length || position} bài\``, inline: true }
+                    )
+                    .setThumbnail(track.thumbnail)
+                    .setFooter({ text: 'Craftopia Music Studio' })
+                    .setTimestamp();
+
+                await channel.send({ embeds: [embed] });
+            } catch (err) {
+                console.error('[Craftopia Music] Lỗi gửi thông báo trackAdd vào voice:', err.message);
             }
         });
     }
