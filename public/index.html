@@ -50,6 +50,10 @@
                     <span>Hàng đợi (Queue)</span>
                     <span class="nav-badge" id="sidebar-queue-count">0</span>
                 </li>
+                <li class="nav-item" data-tab="tab-lyrics">
+                    <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><line x1="9" y1="9" x2="15" y2="9"></line><line x1="9" y1="13" x2="13" y2="13"></line></svg>
+                    <span>Lời bài hát (Lyrics)</span>
+                </li>
             </ul>
 
             <!-- Server Library Section -->
@@ -122,6 +126,12 @@
                 </div>
 
                 <div class="header-right">
+                    <!-- Multi-Bot Active Rooms Pills Hub -->
+                    <div class="rooms-switcher-bar" id="rooms-switcher-bar" style="display:none;" title="Chuyển đổi phòng thoại đang phát">
+                        <span class="pill-dot glow"></span>
+                        <div class="rooms-chips-list" id="rooms-chips-list"></div>
+                    </div>
+
                     <div class="guild-dropdown-wrap">
                         <svg class="dropdown-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19.27 5.33C17.94 4.71 16.5 4.26 15 4a.09.09 0 0 0-.07.03c-.18.33-.39.76-.53 1.09a16.09 16.09 0 0 0-4.8 0c-.14-.34-.35-.76-.54-1.09-.01-.02-.04-.03-.07-.03-1.5.26-2.93.71-4.27 1.33-.01 0-.02.01-.03.02-2.72 4.07-3.47 8.03-3.1 11.95 0 .02.01.04.03.05 1.8 1.32 3.53 2.12 5.24 2.65.03.01.06 0 .07-.02.4-.55.76-1.13 1.07-1.74.02-.04 0-.08-.04-.09-.57-.22-1.11-.48-1.64-.78-.04-.02-.04-.08-.01-.11.11-.08.22-.17.33-.25.02-.02.05-.02.07-.01 3.44 1.57 7.15 1.57 10.55 0 .02-.01.05-.01.07.01.11.09.22.17.33.26.04.03.04.09-.01.11-.52.31-1.07.56-1.64.78-.04.01-.05.06-.04.09.32.61.68 1.19 1.07 1.74.03.01.06.02.09.01 1.72-.53 3.45-1.33 5.25-2.65.02-.01.03-.03.03-.05.44-4.53-.73-8.46-3.1-11.95-.01-.01-.02-.02-.04-.02z"/></svg>
                         <select class="guild-dropdown" id="guild-select">
@@ -404,6 +414,36 @@
                         </table>
                     </div>
                 </div>
+
+                <!-- TAB 4: LYRICS (LỜI BÀI HÁT & KARAOKE) -->
+                <div class="tab-view" id="tab-lyrics">
+                    <div class="lyrics-card">
+                        <div class="lyrics-header">
+                            <div class="lyrics-track-info">
+                                <img id="lyrics-art" src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&h=100&fit=crop" alt="Artwork">
+                                <div>
+                                    <h2 class="lyrics-title" id="lyrics-title">Chưa có bài hát đang phát</h2>
+                                    <p class="lyrics-artist" id="lyrics-artist">Phát bài hát để thưởng thức chế độ Karaoke Lyrics đồng bộ</p>
+                                </div>
+                            </div>
+                            <div class="lyrics-actions">
+                                <span class="badge-tech glow">KARAOKE FLOW</span>
+                                <button class="btn-pill" id="btn-copy-lyrics" title="Sao chép lời bài hát">📋 Sao chép</button>
+                            </div>
+                        </div>
+
+                        <div class="lyrics-viewport" id="lyrics-viewport">
+                            <div class="lyrics-lines-wrap" id="lyrics-lines-wrap">
+                                <!-- Populated dynamically with synced or styled lyrics -->
+                                <div class="lyrics-empty-state">
+                                    <div class="lyrics-musical-note">🎵</div>
+                                    <p>Đang tìm kiếm lời bài hát tự động...</p>
+                                    <span>Lời bài hát sẽ hiển thị dạng chữ phát sáng theo giai điệu bài hát đang phát</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </main>
     </div>
@@ -413,7 +453,7 @@
         <!-- Top mini progress bar for mobile -->
         <div class="mobile-mini-progress"><div class="mobile-mini-fill" id="mobile-mini-fill"></div></div>
 
-        <!-- Left: Track info -->
+        <!-- Left: Track info & Visualizer -->
         <div class="player-left" id="player-left-touch">
             <div class="player-thumb-wrap">
                 <img class="player-thumb" id="bar-thumb" src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&h=100&fit=crop" alt="Thumbnail">
@@ -422,6 +462,9 @@
             <div class="player-track-info">
                 <div class="player-title" id="bar-title">Chưa phát nhạc</div>
                 <div class="player-artist" id="bar-artist">Craftopia Music Studio</div>
+            </div>
+            <div class="player-mini-waveform" id="player-mini-waveform">
+                <span></span><span></span><span></span><span></span><span></span>
             </div>
             <button class="player-heart" id="bar-heart-btn" title="Yêu thích">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
@@ -462,21 +505,38 @@
             </div>
         </div>
 
-        <!-- Right: Volume, Theater, and Status -->
+        <!-- Right: Volume, Theater, Quick Tools, and Status -->
         <div class="player-right">
             <span class="player-voice-pill" id="bar-voice-badge">
                 <span class="pill-dot"></span>
                 <span>🔊 Kênh thoại</span>
             </span>
+
+            <button class="btn-ctrl btn-icon-round" id="btn-bar-lyrics" title="Lời bài hát (Lyrics)">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><line x1="9" y1="9" x2="15" y2="9"></line><line x1="9" y1="13" x2="13" y2="13"></line></svg>
+            </button>
+
+            <button class="btn-ctrl btn-icon-round" id="btn-open-eq" title="Bộ chỉnh âm thanh Studio Equalizer">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21v-7m0-4V3m8 21v-9m0-4V3m8 21v-5m0-4V3M1 14h6m2-6h6m2 8h6"/></svg>
+            </button>
+
+            <button class="btn-ctrl btn-icon-round" id="btn-open-sleep" title="Hẹn giờ tắt nhạc (Sleep Timer)">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                <span class="sleep-indicator-dot" id="sleep-dot" style="display:none;"></span>
+            </button>
+
+            <button class="btn-ctrl btn-icon-round" id="btn-open-shortcuts" title="Bảng phím tắt bàn phím (?)">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="8" x2="6" y2="8"/><line x1="10" y1="8" x2="10" y2="8"/><line x1="14" y1="8" x2="14" y2="8"/><line x1="18" y1="8" x2="18" y2="8"/><line x1="7" y1="16" x2="17" y2="16"/></svg>
+            </button>
             
-            <button class="btn-ctrl" id="btn-toggle-theater" title="Chế độ Toàn màn hình (Theater Mode)">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <button class="btn-ctrl btn-icon-round" id="btn-toggle-theater" title="Chế độ Toàn màn hình (Theater Mode - F)">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
                 </svg>
             </button>
 
             <div class="volume-wrap">
-                <button class="btn-ctrl" id="btn-volume-icon" title="Tắt tiếng">
+                <button class="btn-ctrl" id="btn-volume-icon" title="Tắt tiếng (M)">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" id="vol-svg"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
                 </button>
                 <div class="slider-container" id="vol-slider">
@@ -498,6 +558,10 @@
         <button class="mobile-nav-item" data-tab="tab-search">
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
             <span>Tìm kiếm</span>
+        </button>
+        <button class="mobile-nav-item" data-tab="tab-lyrics">
+            <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><line x1="9" y1="9" x2="15" y2="9"></line><line x1="9" y1="13" x2="13" y2="13"></line></svg>
+            <span>Lời bài hát</span>
         </button>
         <button class="mobile-nav-item" data-tab="tab-queue">
             <div class="mobile-badge-wrap">
@@ -571,6 +635,101 @@
             <div class="modal-actions-row">
                 <button class="btn-pill" id="btn-modal-cancel">Hủy</button>
                 <button class="btn-pill btn-pill-primary" id="btn-modal-connect">Tham gia ngay</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sleep Timer Modal -->
+    <div class="modal-overlay" id="sleep-modal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header-row">
+                <div class="modal-title">🌙 Hẹn Giờ Tắt Nhạc (Sleep Timer)</div>
+                <button class="btn-close-modal" id="btn-sleep-close">✕</button>
+            </div>
+            <p style="font-size:13.5px; color:var(--text-secondary); margin-bottom:16px;">Bot sẽ tự động tạm dừng phát nhạc sau thời gian bạn chọn để bạn thư giãn chìm vào giấc ngủ:</p>
+            <div class="sleep-options-grid">
+                <button class="sleep-btn" data-minutes="15">⏱️ 15 phút</button>
+                <button class="sleep-btn" data-minutes="30">⏱️ 30 phút</button>
+                <button class="sleep-btn" data-minutes="45">⏱️ 45 phút</button>
+                <button class="sleep-btn" data-minutes="60">⏱️ 60 phút</button>
+                <button class="sleep-btn" data-minutes="end">🎵 Hết bài đang phát</button>
+                <button class="sleep-btn sleep-cancel" data-minutes="0">❌ Huỷ hẹn giờ</button>
+            </div>
+            <div id="sleep-status-bar" class="sleep-status-bar" style="display:none;"></div>
+        </div>
+    </div>
+
+    <!-- Studio Audio Equalizer Modal -->
+    <div class="modal-overlay" id="eq-modal">
+        <div class="modal-content modal-md">
+            <div class="modal-header-row">
+                <div class="modal-title">🎛️ Bộ Chỉnh Âm Studio (Audio Equalizer)</div>
+                <button class="btn-close-modal" id="btn-eq-close">✕</button>
+            </div>
+            <p style="font-size:13.5px; color:var(--text-secondary); margin-bottom:16px;">Tối ưu hóa âm học và tần số âm thanh theo phong cách nghe nhạc của bạn:</p>
+            
+            <div class="eq-presets-row">
+                <button class="eq-preset-chip active" data-preset="studio">Chuẩn Studio</button>
+                <button class="eq-preset-chip" data-preset="bass">Bass Boost Siêu Căng</button>
+                <button class="eq-preset-chip" data-preset="vocal">Vocal Trong Trẻo</button>
+                <button class="eq-preset-chip" data-preset="chill">Lofi & Chill</button>
+                <button class="eq-preset-chip" data-preset="club">EDM Festival</button>
+            </div>
+
+            <div class="eq-sliders-board">
+                <div class="eq-band">
+                    <div class="eq-meter"><div class="eq-meter-fill" id="eq-f1" style="height:65%;"></div></div>
+                    <span>60Hz (Sub)</span>
+                </div>
+                <div class="eq-band">
+                    <div class="eq-meter"><div class="eq-meter-fill" id="eq-f2" style="height:78%;"></div></div>
+                    <span>250Hz (Bass)</span>
+                </div>
+                <div class="eq-band">
+                    <div class="eq-meter"><div class="eq-meter-fill" id="eq-f3" style="height:55%;"></div></div>
+                    <span>1kHz (Mid)</span>
+                </div>
+                <div class="eq-band">
+                    <div class="eq-meter"><div class="eq-meter-fill" id="eq-f4" style="height:70%;"></div></div>
+                    <span>4kHz (Treble)</span>
+                </div>
+                <div class="eq-band">
+                    <div class="eq-meter"><div class="eq-meter-fill" id="eq-f5" style="height:85%;"></div></div>
+                    <span>16kHz (Air)</span>
+                </div>
+            </div>
+
+            <div class="modal-actions-row" style="margin-top:20px;">
+                <div style="font-size:12px; color:var(--text-muted); display:flex; align-items:center; gap:6px;">
+                    <span class="pill-dot"></span> Xử lý âm thanh 32-bit Floating Point Audio
+                </div>
+                <button class="btn-pill btn-pill-primary" id="btn-eq-done">Áp dụng</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Keyboard Shortcuts Cheatsheet Modal -->
+    <div class="modal-overlay" id="shortcuts-modal">
+        <div class="modal-content modal-md">
+            <div class="modal-header-row">
+                <div class="modal-title">⌨️ Phím Tắt Nhanh (Keyboard Shortcuts)</div>
+                <button class="btn-close-modal" id="btn-shortcuts-close">✕</button>
+            </div>
+            <div class="shortcuts-grid">
+                <div class="shortcut-item"><kbd>Space</kbd><span>Phát / Tạm dừng</span></div>
+                <div class="shortcut-item"><kbd>→</kbd><span>Tua tới 5 giây</span></div>
+                <div class="shortcut-item"><kbd>←</kbd><span>Tua lùi 5 giây</span></div>
+                <div class="shortcut-item"><kbd>↑</kbd><span>Tăng âm lượng (+5%)</span></div>
+                <div class="shortcut-item"><kbd>↓</kbd><span>Giảm âm lượng (-5%)</span></div>
+                <div class="shortcut-item"><kbd>M</kbd><span>Bật / Tắt tiếng (Mute)</span></div>
+                <div class="shortcut-item"><kbd>N</kbd><span>Bỏ qua bài (Next)</span></div>
+                <div class="shortcut-item"><kbd>P</kbd><span>Bài trước đó (Prev)</span></div>
+                <div class="shortcut-item"><kbd>L</kbd><span>Đổi chế độ lặp (Loop)</span></div>
+                <div class="shortcut-item"><kbd>S</kbd><span>Xáo trộn danh sách (Shuffle)</span></div>
+                <div class="shortcut-item"><kbd>F</kbd><span>Toàn màn hình (Theater)</span></div>
+                <div class="shortcut-item"><kbd>/</kbd><span>Tìm kiếm nhanh</span></div>
+                <div class="shortcut-item"><kbd>Esc</kbd><span>Đóng cửa sổ / modal</span></div>
+                <div class="shortcut-item"><kbd>?</kbd><span>Mở bảng phím tắt này</span></div>
             </div>
         </div>
     </div>

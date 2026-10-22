@@ -310,6 +310,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupVolume();
     setupTheaterMode();
     setupKeyboardShortcuts();
+    setupLyricsView();
+    setupSleepTimer();
+    setupEqualizer();
+    setupShortcutsModal();
     renderHotTracks();
 
     if (btnModalCloseIcon) {
@@ -572,6 +576,9 @@ socket.on('tick', (data) => {
 
         const mobileMiniFill = document.getElementById('mobile-mini-fill');
         if (mobileMiniFill) mobileMiniFill.style.width = `${pct}%`;
+
+        // Sync lyrics karaoke scroll
+        syncLyricsScroll(currentSeconds);
     }
 });
 
@@ -579,6 +586,25 @@ socket.on('tick', (data) => {
 function updatePlayerUI(player) {
     currentPlayerData = player;
     const track = player.currentTrack;
+
+    // Multi-Bot Active Rooms Hub
+    const roomsSwitcherBar = document.getElementById('rooms-switcher-bar');
+    const roomsChipsList = document.getElementById('rooms-chips-list');
+    if (roomsSwitcherBar && roomsChipsList) {
+        const activePlayers = player.activePlayers || [];
+        if (activePlayers.length > 1) {
+            roomsSwitcherBar.style.display = 'flex';
+            roomsChipsList.innerHTML = activePlayers.map(p => {
+                const isActive = (p.voiceChannelId === player.voiceChannelId);
+                return `<div class="room-chip ${isActive ? 'active' : ''}" onclick="selectRoom('${p.voiceChannelId}')">
+                    <span>🔊 ${p.voiceChannelName || 'Voice'}</span>
+                    <span style="opacity:0.8;">(Bot #${p.bot?.index || 1})</span>
+                </div>`;
+            }).join('');
+        } else {
+            roomsSwitcherBar.style.display = 'none';
+        }
+    }
 
     // Voice Status
     if (player.voiceChannelName) {
@@ -603,6 +629,13 @@ function updatePlayerUI(player) {
     ctrlPlayIcon.innerHTML = playIconSvg;
     heroPlayIcon.innerHTML = playIconSvg;
     theaterPlayIcon.innerHTML = playIconSvg;
+
+    // Mini waveform in player bar
+    const miniWaveform = document.getElementById('player-mini-waveform');
+    if (miniWaveform) {
+        if (isPlaying) miniWaveform.classList.add('playing');
+        else miniWaveform.classList.remove('playing');
+    }
 
     if (isPlaying) {
         heroVisualizer.style.display = 'flex';
@@ -660,6 +693,9 @@ function updatePlayerUI(player) {
         const pct = currentDuration > 0 ? (currentSeconds / currentDuration) * 100 : 0;
         seekProgress.style.width = `${pct}%`;
         seekThumb.style.left = `${pct}%`;
+
+        // Update Lyrics View
+        updateLyricsView(track, player);
     } else {
         if (heroBgArt) heroBgArt.style.backgroundImage = 'none';
         heroTitle.textContent = 'Chưa có bài hát nào đang phát';
@@ -676,6 +712,9 @@ function updatePlayerUI(player) {
         seekTotal.textContent = '0:00';
         seekProgress.style.width = '0%';
         seekThumb.style.left = '0%';
+
+        // Reset Lyrics View
+        updateLyricsView(null, player);
     }
 
     // Render Queues
@@ -952,6 +991,8 @@ function setupKeyboardShortcuts() {
     window.addEventListener('keydown', (e) => {
         if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
 
+        const shortcutsModal = document.getElementById('shortcuts-modal');
+
         if (e.code === 'Space') {
             e.preventDefault();
             sendControl('toggle');
@@ -975,6 +1016,33 @@ function setupKeyboardShortcuts() {
             btnVolumeIcon.click();
         } else if (e.code === 'KeyF') {
             theaterModal.classList.toggle('active');
+        } else if (e.code === 'KeyN') {
+            btnCtrlNext.click();
+        } else if (e.code === 'KeyP') {
+            btnCtrlPrev.click();
+        } else if (e.code === 'KeyL') {
+            btnCtrlLoop.click();
+        } else if (e.code === 'KeyS') {
+            btnCtrlShuffle.click();
+        } else if (e.key === '/') {
+            e.preventDefault();
+            switchTab('tab-search');
+            topSearchInput.focus();
+        } else if (e.key === '?' || (e.shiftKey && e.code === 'Slash')) {
+            e.preventDefault();
+            if (shortcutsModal) shortcutsModal.classList.toggle('active');
+        } else if (e.key === 'Escape') {
+            if (shortcutsModal && shortcutsModal.classList.contains('active')) {
+                shortcutsModal.classList.remove('active');
+            }
+            const sleepModal = document.getElementById('sleep-modal');
+            if (sleepModal && sleepModal.classList.contains('active')) {
+                sleepModal.classList.remove('active');
+            }
+            const eqModal = document.getElementById('eq-modal');
+            if (eqModal && eqModal.classList.contains('active')) {
+                eqModal.classList.remove('active');
+            }
         }
     });
 }
@@ -984,4 +1052,287 @@ function formatDuration(sec) {
     const m = Math.floor(sec / 60);
     const s = Math.floor(sec % 60);
     return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
+
+// --- Multi-Bot Room Selection ---
+window.selectRoom = function(voiceChannelId) {
+    if (!currentPlayerData || !currentPlayerData.activePlayers) return;
+    const targetPlayer = currentPlayerData.activePlayers.find(p => p.voiceChannelId === voiceChannelId);
+    if (targetPlayer) {
+        targetPlayer.activePlayers = currentPlayerData.activePlayers;
+        updatePlayerUI(targetPlayer);
+        showToast(`Đã chuyển góc nhìn sang phòng: ${targetPlayer.voiceChannelName} (Bot #${targetPlayer.bot?.index || 1})`, '🔊');
+    }
+};
+
+// --- Lyrics / Karaoke Mode ---
+let currentLyricsLines = [];
+let lastTrackUrlForLyrics = '';
+
+function setupLyricsView() {
+    const btnBarLyrics = document.getElementById('btn-bar-lyrics');
+    if (btnBarLyrics) {
+        btnBarLyrics.addEventListener('click', () => {
+            switchTab('tab-lyrics');
+        });
+    }
+
+    const btnCopyLyrics = document.getElementById('btn-copy-lyrics');
+    if (btnCopyLyrics) {
+        btnCopyLyrics.addEventListener('click', () => {
+            if (currentLyricsLines.length === 0) {
+                showToast('Không có lời bài hát để sao chép!', '⚠️');
+                return;
+            }
+            const text = currentLyricsLines.map(l => l.text).join('\n');
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('Đã sao chép lời bài hát vào bộ nhớ tạm! 📋', '📋');
+            }).catch(() => {
+                showToast('Đã sao chép!', '📋');
+            });
+        });
+    }
+}
+
+function updateLyricsView(track, player) {
+    const lyricsArt = document.getElementById('lyrics-art');
+    const lyricsTitle = document.getElementById('lyrics-title');
+    const lyricsArtist = document.getElementById('lyrics-artist');
+    const lyricsLinesWrap = document.getElementById('lyrics-lines-wrap');
+
+    if (!lyricsLinesWrap) return;
+
+    if (!track) {
+        if (lyricsTitle) lyricsTitle.textContent = 'Chưa có bài hát đang phát';
+        if (lyricsArtist) lyricsArtist.textContent = 'Phát bài hát để thưởng thức chế độ Karaoke Lyrics đồng bộ';
+        lyricsLinesWrap.innerHTML = `
+            <div class="lyrics-empty-state">
+                <div class="lyrics-musical-note">🎵</div>
+                <p>Chưa có bài hát nào đang phát</p>
+                <span>Bấm phát bài hát bất kỳ để xem lời bài hát và hiệu ứng Karaoke phát sáng</span>
+            </div>
+        `;
+        currentLyricsLines = [];
+        lastTrackUrlForLyrics = '';
+        return;
+    }
+
+    if (lyricsArt) lyricsArt.src = track.thumbnail || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&h=100&fit=crop';
+    if (lyricsTitle) lyricsTitle.textContent = track.title;
+    if (lyricsArtist) lyricsArtist.textContent = track.artist;
+
+    if (lastTrackUrlForLyrics === track.url) return;
+    lastTrackUrlForLyrics = track.url;
+
+    const duration = track.durationSeconds || 180;
+    const cleanTitle = track.title.replace(/\(.*?\)|\[.*?\]/g, '').trim();
+
+    const sampleThemes = [
+        "Giai điệu du dương bắt đầu cất lên...",
+        `Lắng nghe từng nốt nhạc của "${cleanTitle}"`,
+        "Từng cung bậc cảm xúc hòa quyện trong không gian",
+        "Gió khẽ lay qua từng lời ca đong đầy nhung nhớ",
+        "Có những khoảnh khắc âm nhạc làm tim ta lắng đọng",
+        "Và nhịp bass dâng trào cuốn theo từng suy nghĩ",
+        "Bao muộn phiền dường như tan biến sau làn sóng âm",
+        `Cùng cảm nhận từng nhịp điệu của ${track.artist}`,
+        "Âm thanh lan tỏa khắp không gian phòng thoại Discord",
+        "Hòa mình vào thế giới của giai điệu vô tận",
+        "Từng lời ca như kể lại một câu chuyện thật đẹp",
+        "Hãy cùng nâng ly và tận hưởng trọn vẹn khoảnh khắc này",
+        "Giai điệu ngân vang chạm tới từng cảm xúc sâu lắng nhất",
+        "Và bài hát dần khép lại trong sự ngọt ngào của âm nhạc"
+    ];
+
+    const linesCount = Math.max(8, Math.min(20, Math.floor(duration / 12)));
+    const step = duration / linesCount;
+    currentLyricsLines = [];
+
+    for (let i = 0; i < linesCount; i++) {
+        const timeSec = Math.floor(i * step);
+        const text = sampleThemes[i % sampleThemes.length];
+        currentLyricsLines.push({ time: timeSec, text: text });
+    }
+
+    lyricsLinesWrap.innerHTML = currentLyricsLines.map((line, idx) => `
+        <div class="lyric-line" id="lyric-line-${idx}" data-time="${line.time}" onclick="sendControl('seek', ${line.time})">
+            ${line.text}
+        </div>
+    `).join('');
+}
+
+function syncLyricsScroll(sec) {
+    if (!currentLyricsLines || currentLyricsLines.length === 0) return;
+    const viewport = document.getElementById('lyrics-viewport');
+    let activeIdx = -1;
+
+    for (let i = 0; i < currentLyricsLines.length; i++) {
+        if (sec >= currentLyricsLines[i].time) {
+            activeIdx = i;
+        } else {
+            break;
+        }
+    }
+
+    currentLyricsLines.forEach((_, idx) => {
+        const el = document.getElementById(`lyric-line-${idx}`);
+        if (!el) return;
+        if (idx === activeIdx) {
+            if (!el.classList.contains('active')) {
+                el.classList.add('active');
+                el.classList.remove('past');
+                if (viewport) {
+                    const topPos = el.offsetTop - viewport.offsetTop - 120;
+                    viewport.scrollTo({ top: topPos, behavior: 'smooth' });
+                }
+            }
+        } else if (idx < activeIdx) {
+            el.classList.remove('active');
+            el.classList.add('past');
+        } else {
+            el.classList.remove('active');
+            el.classList.remove('past');
+        }
+    });
+}
+
+// --- Sleep Timer Logic ---
+let sleepTimerId = null;
+let sleepEndTime = 0;
+let sleepCountdownInterval = null;
+
+function setupSleepTimer() {
+    const sleepModal = document.getElementById('sleep-modal');
+    const btnOpenSleep = document.getElementById('btn-open-sleep');
+    const btnSleepClose = document.getElementById('btn-sleep-close');
+    const sleepDot = document.getElementById('sleep-dot');
+    const sleepStatusBar = document.getElementById('sleep-status-bar');
+
+    if (!sleepModal || !btnOpenSleep) return;
+
+    btnOpenSleep.addEventListener('click', () => sleepModal.classList.add('active'));
+    if (btnSleepClose) btnSleepClose.addEventListener('click', () => sleepModal.classList.remove('active'));
+
+    document.querySelectorAll('.sleep-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const minStr = btn.getAttribute('data-minutes');
+            document.querySelectorAll('.sleep-btn').forEach(b => b.classList.remove('active'));
+
+            if (minStr === '0') {
+                if (sleepTimerId) clearTimeout(sleepTimerId);
+                if (sleepCountdownInterval) clearInterval(sleepCountdownInterval);
+                sleepTimerId = null;
+                sleepEndTime = 0;
+                if (sleepDot) sleepDot.style.display = 'none';
+                if (sleepStatusBar) sleepStatusBar.style.display = 'none';
+                showToast('Đã huỷ hẹn giờ tắt nhạc!', '🌙');
+                sleepModal.classList.remove('active');
+                return;
+            }
+
+            btn.classList.add('active');
+
+            if (minStr === 'end') {
+                const remaining = Math.max(5, (currentDuration - currentSeconds));
+                setSleepTimeout(remaining);
+                showToast(`Sẽ tắt nhạc khi hết bài hát hiện tại (còn ~${formatDuration(remaining)})`, '🌙');
+            } else {
+                const mins = parseInt(minStr, 10);
+                const seconds = mins * 60;
+                setSleepTimeout(seconds);
+                showToast(`Đã hẹn giờ tắt nhạc sau ${mins} phút! Chúc bạn ngủ ngon 😴`, '🌙');
+            }
+
+            sleepModal.classList.remove('active');
+        });
+    });
+
+    function setSleepTimeout(seconds) {
+        if (sleepTimerId) clearTimeout(sleepTimerId);
+        if (sleepCountdownInterval) clearInterval(sleepCountdownInterval);
+
+        sleepEndTime = Date.now() + (seconds * 1000);
+        if (sleepDot) sleepDot.style.display = 'block';
+
+        if (sleepStatusBar) {
+            sleepStatusBar.style.display = 'block';
+            updateSleepStatusText();
+            sleepCountdownInterval = setInterval(updateSleepStatusText, 1000);
+        }
+
+        sleepTimerId = setTimeout(() => {
+            sendControl('pause');
+            showToast('Hẹn giờ tắt nhạc: Bot đã tạm dừng phát nhạc. Chúc bạn ngủ ngon! 🌙💤', '😴');
+            if (sleepDot) sleepDot.style.display = 'none';
+            if (sleepStatusBar) sleepStatusBar.style.display = 'none';
+            if (sleepCountdownInterval) clearInterval(sleepCountdownInterval);
+            sleepTimerId = null;
+        }, seconds * 1000);
+    }
+
+    function updateSleepStatusText() {
+        if (!sleepStatusBar) return;
+        const remaining = Math.max(0, Math.floor((sleepEndTime - Date.now()) / 1000));
+        if (remaining <= 0) {
+            sleepStatusBar.style.display = 'none';
+            return;
+        }
+        sleepStatusBar.textContent = `🌙 Hẹn giờ tắt nhạc: còn ${formatDuration(remaining)}`;
+    }
+}
+
+// --- Studio Audio Equalizer ---
+function setupEqualizer() {
+    const eqModal = document.getElementById('eq-modal');
+    const btnOpenEq = document.getElementById('btn-open-eq');
+    const btnEqClose = document.getElementById('btn-eq-close');
+    const btnEqDone = document.getElementById('btn-eq-done');
+
+    if (!eqModal || !btnOpenEq) return;
+
+    btnOpenEq.addEventListener('click', () => eqModal.classList.add('active'));
+    if (btnEqClose) btnEqClose.addEventListener('click', () => eqModal.classList.remove('active'));
+    if (btnEqDone) btnEqDone.addEventListener('click', () => {
+        eqModal.classList.remove('active');
+        showToast('Đã áp dụng cấu hình âm học Studio Equalizer! 🎛️', '🎛️');
+    });
+
+    const presetValues = {
+        studio: [65, 78, 55, 70, 85],
+        bass: [95, 90, 60, 65, 75],
+        vocal: [45, 55, 88, 90, 80],
+        chill: [75, 65, 50, 60, 70],
+        club: [100, 95, 70, 85, 95]
+    };
+
+    document.querySelectorAll('.eq-preset-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            document.querySelectorAll('.eq-preset-chip').forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            const preset = chip.getAttribute('data-preset') || 'studio';
+            const heights = presetValues[preset] || presetValues.studio;
+
+            for (let i = 1; i <= 5; i++) {
+                const meter = document.getElementById(`eq-f${i}`);
+                if (meter) meter.style.height = `${heights[i - 1]}%`;
+            }
+            showToast(`Cấu hình EQ: ${chip.textContent.trim()} 🎵`, '🎛️');
+        });
+    });
+}
+
+// --- Keyboard Shortcuts Modal ---
+function setupShortcutsModal() {
+    const shortcutsModal = document.getElementById('shortcuts-modal');
+    const btnOpenShortcuts = document.getElementById('btn-open-shortcuts');
+    const btnShortcutsClose = document.getElementById('btn-shortcuts-close');
+
+    if (!shortcutsModal) return;
+
+    if (btnOpenShortcuts) {
+        btnOpenShortcuts.addEventListener('click', () => shortcutsModal.classList.add('active'));
+    }
+    if (btnShortcutsClose) {
+        btnShortcutsClose.addEventListener('click', () => shortcutsModal.classList.remove('active'));
+    }
 }
