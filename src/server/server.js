@@ -7,6 +7,7 @@ const session = require('express-session');
 const axios = require('axios');
 const config = require('../../config');
 const musicManager = require('../player/MusicManager');
+const lyricsService = require('../player/LyricsService');
 const bot = require('../bot/bot');
 
 class WebServer {
@@ -238,6 +239,20 @@ class WebServer {
                 res.json({ results });
             } catch (err) {
                 res.status(500).json({ error: err.message });
+            }
+        });
+
+        // --- Real Synchronized Lyrics API ---
+        this.app.get('/api/lyrics', async (req, res) => {
+            const { title, artist, duration } = req.query;
+            if (!title) return res.status(400).json({ error: 'Thiếu tên bài hát' });
+
+            try {
+                const lyrics = await lyricsService.getLyrics(title, artist, parseFloat(duration) || 0);
+                res.json(lyrics);
+            } catch (err) {
+                console.error('[Lyrics API Error]:', err.message);
+                res.status(500).json({ error: 'Không thể tải lời bài hát' });
             }
         });
 

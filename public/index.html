@@ -418,6 +418,7 @@
                 <!-- TAB 4: LYRICS (LỜI BÀI HÁT & KARAOKE) -->
                 <div class="tab-view" id="tab-lyrics">
                     <div class="lyrics-card">
+                        <div class="lyrics-ambient-bg" id="lyrics-ambient-bg"></div>
                         <div class="lyrics-header">
                             <div class="lyrics-track-info">
                                 <img id="lyrics-art" src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&h=100&fit=crop" alt="Artwork">
@@ -427,18 +428,21 @@
                                 </div>
                             </div>
                             <div class="lyrics-actions">
-                                <span class="badge-tech glow">KARAOKE FLOW</span>
+                                <div class="lyrics-search-mini">
+                                    <input type="text" id="lyrics-search-input" placeholder="Tìm lời bài hát khác..." autocomplete="off">
+                                    <button class="btn-lyrics-search" id="btn-lyrics-search" title="Tìm lời bài hát">🔍</button>
+                                </div>
+                                <span class="badge-tech glow" id="lyrics-mode-badge">KARAOKE SYNCED</span>
                                 <button class="btn-pill" id="btn-copy-lyrics" title="Sao chép lời bài hát">📋 Sao chép</button>
                             </div>
                         </div>
 
                         <div class="lyrics-viewport" id="lyrics-viewport">
                             <div class="lyrics-lines-wrap" id="lyrics-lines-wrap">
-                                <!-- Populated dynamically with synced or styled lyrics -->
                                 <div class="lyrics-empty-state">
                                     <div class="lyrics-musical-note">🎵</div>
-                                    <p>Đang tìm kiếm lời bài hát tự động...</p>
-                                    <span>Lời bài hát sẽ hiển thị dạng chữ phát sáng theo giai điệu bài hát đang phát</span>
+                                    <p>Chưa có bài hát nào đang phát</p>
+                                    <span>Bấm phát bài hát bất kỳ để xem lời bài hát và hiệu ứng Karaoke phát sáng thời gian thực</span>
                                 </div>
                             </div>
                         </div>

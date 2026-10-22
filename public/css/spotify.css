@@ -3187,3 +3187,180 @@ kbd {
     font-weight: 700;
     box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
 }
+
+/* ====================================================
+   ENHANCED REAL SYNCED LYRICS & KARAOKE STYLING
+   ==================================================== */
+.lyrics-card {
+    position: relative;
+    overflow: hidden;
+    background: rgba(14, 17, 27, 0.82);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-xl);
+    padding: 36px 40px;
+    backdrop-filter: var(--glass-blur);
+    min-height: calc(100vh - 230px);
+    display: flex;
+    flex-direction: column;
+}
+
+.lyrics-ambient-bg {
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background-size: cover;
+    background-position: center;
+    filter: blur(90px) brightness(0.22) saturate(200%);
+    opacity: 0.7;
+    pointer-events: none;
+    z-index: 0;
+    transition: background-image 1.2s ease-in-out;
+}
+
+.lyrics-header,
+.lyrics-viewport {
+    position: relative;
+    z-index: 1;
+}
+
+.lyrics-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.lyrics-search-mini {
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--radius-full);
+    padding: 4px 6px 4px 14px;
+    transition: all 0.25s var(--ease-out);
+}
+
+.lyrics-search-mini:focus-within {
+    border-color: var(--primary);
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 0 14px var(--primary-glow);
+}
+
+.lyrics-search-mini input {
+    background: none;
+    border: none;
+    outline: none;
+    color: #fff;
+    font-size: 12.5px;
+    font-weight: 500;
+    width: 170px;
+}
+
+.btn-lyrics-search {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: #fff;
+    border-radius: 50%;
+    width: 26px;
+    height: 26px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    transition: all 0.2s var(--ease-spring);
+}
+
+.btn-lyrics-search:hover {
+    background: var(--primary);
+    color: #000;
+    transform: scale(1.1);
+}
+
+.lyric-line {
+    font-size: 30px;
+    font-weight: 800;
+    line-height: 1.45;
+    letter-spacing: -0.6px;
+    color: rgba(255, 255, 255, 0.28);
+    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    cursor: pointer;
+    border-radius: var(--radius-lg);
+    padding: 10px 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: fit-content;
+    max-width: 90%;
+}
+
+.lyric-line:hover {
+    color: rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.05);
+    transform: translateX(8px);
+}
+
+.lyric-line.active {
+    font-size: 38px;
+    font-weight: 900;
+    color: #ffffff;
+    text-shadow: 0 0 35px rgba(16, 185, 129, 0.7), 0 0 65px rgba(6, 182, 212, 0.4);
+    transform: scale(1.03) translateX(14px);
+    background: linear-gradient(90deg, rgba(16, 185, 129, 0.2) 0%, rgba(6, 182, 212, 0.06) 60%, transparent 100%);
+    border-left: 5px solid var(--primary);
+}
+
+.lyric-line.past {
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.lyric-time-badge {
+    font-size: 11.5px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    color: var(--text-muted);
+    opacity: 0;
+    margin-left: 20px;
+    transition: opacity 0.2s ease;
+}
+
+.lyric-line:hover .lyric-time-badge,
+.lyric-line.active .lyric-time-badge {
+    opacity: 0.75;
+}
+
+.lyrics-loading-state {
+    text-align: center;
+    padding: 100px 20px;
+    color: var(--text-secondary);
+}
+
+.lyrics-spinner {
+    width: 44px;
+    height: 44px;
+    margin: 0 auto 18px;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spinLyrics 0.8s linear infinite;
+}
+
+@keyframes spinLyrics {
+    to { transform: rotate(360deg); }
+}
+
+@media (max-width: 768px) {
+    .lyric-line {
+        font-size: 20px;
+        padding: 8px 14px;
+        max-width: 100%;
+    }
+    .lyric-line.active {
+        font-size: 24px;
+        transform: scale(1.02) translateX(6px);
+    }
+    .lyrics-search-mini input {
+        width: 120px;
+    }
+}

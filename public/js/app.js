@@ -1065,9 +1065,11 @@ window.selectRoom = function(voiceChannelId) {
     }
 };
 
-// --- Lyrics / Karaoke Mode ---
+// --- Real Synchronized Lyrics & Karaoke Mode ---
 let currentLyricsLines = [];
 let lastTrackUrlForLyrics = '';
+let isFetchingLyrics = false;
+let currentLyricsIsSynced = true;
 
 function setupLyricsView() {
     const btnBarLyrics = document.getElementById('btn-bar-lyrics');
@@ -1088,17 +1090,43 @@ function setupLyricsView() {
             navigator.clipboard.writeText(text).then(() => {
                 showToast('Đã sao chép lời bài hát vào bộ nhớ tạm! 📋', '📋');
             }).catch(() => {
-                showToast('Đã sao chép!', '📋');
+                showToast('Đã sao chép lời bài hát!', '📋');
             });
+        });
+    }
+
+    const lyricsSearchInput = document.getElementById('lyrics-search-input');
+    const btnLyricsSearch = document.getElementById('btn-lyrics-search');
+
+    if (btnLyricsSearch && lyricsSearchInput) {
+        const doManualSearch = () => {
+            const query = lyricsSearchInput.value.trim();
+            if (query) {
+                fetchAndRenderLyrics(query, '', 0);
+            }
+        };
+
+        btnLyricsSearch.addEventListener('click', doManualSearch);
+        lyricsSearchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') doManualSearch();
         });
     }
 }
 
-function updateLyricsView(track, player) {
+window.promptSearchLyrics = function() {
+    const input = document.getElementById('lyrics-search-input');
+    if (input) {
+        input.focus();
+        showToast('Nhập tên bài hát vào ô tìm kiếm bên trên rồi nhấn Enter!', '🔍');
+    }
+};
+
+async function updateLyricsView(track, player) {
     const lyricsArt = document.getElementById('lyrics-art');
     const lyricsTitle = document.getElementById('lyrics-title');
     const lyricsArtist = document.getElementById('lyrics-artist');
     const lyricsLinesWrap = document.getElementById('lyrics-lines-wrap');
+    const lyricsAmbientBg = document.getElementById('lyrics-ambient-bg');
 
     if (!lyricsLinesWrap) return;
 
@@ -1109,56 +1137,94 @@ function updateLyricsView(track, player) {
             <div class="lyrics-empty-state">
                 <div class="lyrics-musical-note">🎵</div>
                 <p>Chưa có bài hát nào đang phát</p>
-                <span>Bấm phát bài hát bất kỳ để xem lời bài hát và hiệu ứng Karaoke phát sáng</span>
+                <span>Bấm phát bài hát bất kỳ để xem lời bài hát thật chạy theo thời gian thực</span>
             </div>
         `;
         currentLyricsLines = [];
         lastTrackUrlForLyrics = '';
+        if (lyricsAmbientBg) lyricsAmbientBg.style.backgroundImage = 'none';
         return;
     }
 
     if (lyricsArt) lyricsArt.src = track.thumbnail || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&h=100&fit=crop';
+    if (lyricsAmbientBg) lyricsAmbientBg.style.backgroundImage = `url('${track.thumbnail}')`;
     if (lyricsTitle) lyricsTitle.textContent = track.title;
     if (lyricsArtist) lyricsArtist.textContent = track.artist;
 
     if (lastTrackUrlForLyrics === track.url) return;
     lastTrackUrlForLyrics = track.url;
 
-    const duration = track.durationSeconds || 180;
-    const cleanTitle = track.title.replace(/\(.*?\)|\[.*?\]/g, '').trim();
+    await fetchAndRenderLyrics(track.title, track.artist, track.durationSeconds || 0);
+}
 
-    const sampleThemes = [
-        "Giai điệu du dương bắt đầu cất lên...",
-        `Lắng nghe từng nốt nhạc của "${cleanTitle}"`,
-        "Từng cung bậc cảm xúc hòa quyện trong không gian",
-        "Gió khẽ lay qua từng lời ca đong đầy nhung nhớ",
-        "Có những khoảnh khắc âm nhạc làm tim ta lắng đọng",
-        "Và nhịp bass dâng trào cuốn theo từng suy nghĩ",
-        "Bao muộn phiền dường như tan biến sau làn sóng âm",
-        `Cùng cảm nhận từng nhịp điệu của ${track.artist}`,
-        "Âm thanh lan tỏa khắp không gian phòng thoại Discord",
-        "Hòa mình vào thế giới của giai điệu vô tận",
-        "Từng lời ca như kể lại một câu chuyện thật đẹp",
-        "Hãy cùng nâng ly và tận hưởng trọn vẹn khoảnh khắc này",
-        "Giai điệu ngân vang chạm tới từng cảm xúc sâu lắng nhất",
-        "Và bài hát dần khép lại trong sự ngọt ngào của âm nhạc"
-    ];
+async function fetchAndRenderLyrics(title, artist = '', duration = 0) {
+    const lyricsLinesWrap = document.getElementById('lyrics-lines-wrap');
+    const lyricsModeBadge = document.getElementById('lyrics-mode-badge');
+    if (!lyricsLinesWrap) return;
 
-    const linesCount = Math.max(8, Math.min(20, Math.floor(duration / 12)));
-    const step = duration / linesCount;
-    currentLyricsLines = [];
-
-    for (let i = 0; i < linesCount; i++) {
-        const timeSec = Math.floor(i * step);
-        const text = sampleThemes[i % sampleThemes.length];
-        currentLyricsLines.push({ time: timeSec, text: text });
-    }
-
-    lyricsLinesWrap.innerHTML = currentLyricsLines.map((line, idx) => `
-        <div class="lyric-line" id="lyric-line-${idx}" data-time="${line.time}" onclick="sendControl('seek', ${line.time})">
-            ${line.text}
+    lyricsLinesWrap.innerHTML = `
+        <div class="lyrics-loading-state">
+            <div class="lyrics-spinner"></div>
+            <p>Đang tìm kiếm và đồng bộ lời bài hát thật...</p>
+            <span>Tra cứu cơ sở dữ liệu quốc tế & Việt Nam</span>
         </div>
-    `).join('');
+    `;
+
+    try {
+        const queryParams = new URLSearchParams({
+            title: title,
+            artist: artist || '',
+            duration: duration || 0
+        });
+
+        const res = await fetch(`${BACKEND_URL}/api/lyrics?${queryParams.toString()}`);
+        const data = await res.json();
+
+        if (data && data.found && data.lines && data.lines.length > 0) {
+            currentLyricsLines = data.lines;
+            currentLyricsIsSynced = data.synced;
+
+            if (lyricsModeBadge) {
+                lyricsModeBadge.textContent = data.synced ? 'KARAOKE SYNCED' : 'FULL LYRICS';
+            }
+
+            lyricsLinesWrap.innerHTML = currentLyricsLines.map((line, idx) => `
+                <div class="lyric-line" id="lyric-line-${idx}" data-time="${line.time}" onclick="sendControl('seek', ${Math.floor(line.time)})">
+                    <span class="lyric-text">${escapeHtml(line.text)}</span>
+                    <span class="lyric-time-badge">${formatDuration(Math.floor(line.time))}</span>
+                </div>
+            `).join('');
+
+            // Immediately highlight current line
+            syncLyricsScroll(currentSeconds);
+        } else {
+            currentLyricsLines = [];
+            lyricsLinesWrap.innerHTML = `
+                <div class="lyrics-empty-state">
+                    <div class="lyrics-musical-note">🎶</div>
+                    <p>Chưa có dữ liệu lời bài hát đồng bộ cho bài này</p>
+                    <span style="display:block; margin: 8px 0 16px; color:var(--text-muted);">"${escapeHtml(title)}"</span>
+                    <button class="btn-pill" onclick="promptSearchLyrics()">🔍 Tìm kiếm lời bài hát thủ công</button>
+                </div>
+            `;
+        }
+    } catch (err) {
+        console.error('[Lyrics Error]:', err);
+        lyricsLinesWrap.innerHTML = `
+            <div class="lyrics-empty-state">
+                <div class="lyrics-musical-note">⚠️</div>
+                <p>Không thể kết nối đến máy chủ lời bài hát</p>
+                <button class="btn-pill" style="margin-top:14px;" onclick="lastTrackUrlForLyrics=''; updateLyricsView(currentPlayerData?.currentTrack, currentPlayerData)">Thử lại</button>
+            </div>
+        `;
+    }
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    return text.replace(/[&<>"']/g, function(m) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+    });
 }
 
 function syncLyricsScroll(sec) {
@@ -1182,8 +1248,8 @@ function syncLyricsScroll(sec) {
                 el.classList.add('active');
                 el.classList.remove('past');
                 if (viewport) {
-                    const topPos = el.offsetTop - viewport.offsetTop - 120;
-                    viewport.scrollTo({ top: topPos, behavior: 'smooth' });
+                    const targetScroll = el.offsetTop - (viewport.clientHeight / 2) + (el.clientHeight / 2);
+                    viewport.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
                 }
             }
         } else if (idx < activeIdx) {
