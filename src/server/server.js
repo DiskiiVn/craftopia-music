@@ -13,6 +13,10 @@ class WebServer {
     constructor() {
         this.app = express();
         this.server = http.createServer(this.app);
+        
+        // Trust reverse proxy (Cloudflare, Vercel, Render, Nginx)
+        this.app.set('trust proxy', 1);
+
         this.io = new Server(this.server, {
             cors: {
                 origin: '*',
@@ -28,14 +32,21 @@ class WebServer {
     }
 
     setupMiddleware() {
-        this.app.use(cors());
+        this.app.use(cors({
+            origin: true,
+            credentials: true
+        }));
         this.app.use(express.json());
         this.app.use(express.urlencoded({ extended: true }));
         this.app.use(session({
             secret: config.sessionSecret,
             resave: false,
             saveUninitialized: true,
-            cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 }
+            cookie: {
+                maxAge: 7 * 24 * 60 * 60 * 1000,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax'
+            }
         }));
 
         this.app.use(express.static(path.join(__dirname, '../../public')));
@@ -46,9 +57,19 @@ class WebServer {
         this.app.get('/health', (req, res) => {
             res.json({
                 status: 'ok',
+                domain: config.domain,
                 botReady: bot.client.isReady(),
                 uptime: process.uptime(),
                 guilds: bot.client.isReady() ? bot.client.guilds.cache.size : 0
+            });
+        });
+
+        // Config endpoint for Frontend
+        this.app.get('/api/config', (req, res) => {
+            res.json({
+                domain: config.domain,
+                clientId: config.clientId,
+                botReady: bot.client.isReady()
             });
         });
 
@@ -217,22 +238,18 @@ class WebServer {
             let player = musicManager.getPlayer(guildId);
             let targetVoice = null;
 
-            // 1. Specified directly in request
             if (voiceChannelId) {
                 targetVoice = guild.channels.cache.get(voiceChannelId);
             }
-            // 2. Existing active player voice channel
             if (!targetVoice && player && player.voiceChannelId) {
                 targetVoice = guild.channels.cache.get(player.voiceChannelId);
             }
-            // 3. User's active voice channel in guild
             if (!targetVoice && req.session.user && req.session.user.id) {
                 const member = guild.members.cache.get(req.session.user.id);
                 if (member && member.voice && member.voice.channel) {
                     targetVoice = member.voice.channel;
                 }
             }
-            // 4. Voice channel with active human members
             if (!targetVoice) {
                 const voiceChannels = guild.channels.cache.filter(c => c.isVoiceBased());
                 const withHumans = voiceChannels.find(c => c.members.some(m => !m.user.bot));
@@ -348,7 +365,8 @@ class WebServer {
 
     start() {
         this.server.listen(config.port, () => {
-            console.log(`[Spotify Web Dashboard] Sẵn sàng tại: http://localhost:${config.port}`);
+            console.log(`[Craftopia Music API] Sẵn sàng tại: http://localhost:${config.port}`);
+            console.log(`[Craftopia Music Domain] Tên miền cấu hình: ${config.domain}`);
         });
     }
 }

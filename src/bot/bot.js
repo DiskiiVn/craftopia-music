@@ -12,7 +12,7 @@ const config = require('../../config');
 const commands = require('./commands');
 const musicManager = require('../player/MusicManager');
 
-const BRAND_COLOR = 0x1DB954; // Emerald Spotify Green
+const BRAND_COLOR = 0x1DB954;
 
 function createProgressBar(currentSec, totalSec, size = 15) {
     if (!totalSec || totalSec <= 0) return '🔘' + '▬'.repeat(size);
@@ -51,7 +51,7 @@ class DiscordMusicBot {
                 console.error('[Craftopia Music] Lỗi khi đăng ký Slash Commands:', err.message);
             }
 
-            this.client.user.setActivity('🎵 Craftopia Music | /play', { type: 2 });
+            this.client.user.setActivity('🎵 music.craftopics.online | /play', { type: 2 });
         });
 
         // Slash command interactions
@@ -77,8 +77,9 @@ class DiscordMusicBot {
                     .setURL(track.url)
                     .setDescription(`**Nghệ sĩ:** ${track.artist}\n**Thời lượng:** \`${track.durationFormatted}\`\n**Yêu cầu bởi:** ${track.requestedBy ? track.requestedBy.username : 'Web Dashboard'}`)
                     .setThumbnail(track.thumbnail)
-                    .setFooter({ text: 'Dùng /dashboard để điều khiển nhạc trên Web Dashboard' });
+                    .setFooter({ text: 'Dùng /dashboard hoặc vào music.craftopics.online để điều khiển' });
 
+                const dashboardUrl = `${config.domain}?guild=${guildId}`;
                 const row = new ActionRowBuilder().addComponents(
                     new ButtonBuilder()
                         .setCustomId(`btn_pause_${guildId}`)
@@ -96,9 +97,9 @@ class DiscordMusicBot {
                         .setStyle(ButtonStyle.Secondary)
                         .setEmoji('🔁'),
                     new ButtonBuilder()
-                        .setLabel('Craftopia Dashboard')
+                        .setLabel('Mở Web Dashboard')
                         .setStyle(ButtonStyle.Link)
-                        .setURL(`http://localhost:${config.port}?guild=${guildId}`)
+                        .setURL(dashboardUrl)
                         .setEmoji('🎧')
                 );
 
@@ -112,21 +113,21 @@ class DiscordMusicBot {
     async handleCommand(interaction) {
         const { commandName, guildId, member, channel } = interaction;
         const voiceChannel = member?.voice?.channel;
+        const dashboardUrl = `${config.domain}?guild=${guildId}`;
 
         if (commandName === 'dashboard') {
-            const dashboardUrl = `http://localhost:${config.port}?guild=${guildId}`;
             const embed = new EmbedBuilder()
                 .setColor(BRAND_COLOR)
-                .setTitle('🎧 Craftopia Music Dashboard')
-                .setDescription(`Điều khiển âm nhạc theo thời gian thực trên giao diện Web hiện đại tại:\n\n🔗 **[Mở Craftopia Music Dashboard](${dashboardUrl})**`)
+                .setTitle('🎧 Craftopia Music Web Dashboard')
+                .setDescription(`Điều khiển âm nhạc trực tiếp theo thời gian thực tại tên miền chính thức:\n\n🔗 **[Mở Craftopia Music Dashboard](${dashboardUrl})**\n*(Domain: \`${config.domain}\`)*`)
                 .addFields(
-                    { name: '✨ Tính năng nổi bật', value: '• Tìm kiếm bài hát trực tiếp\n• Kéo tua bài hát theo từng giây\n• Điều chỉnh âm lượng & xáo trộn\n• Quản lý danh sách chờ thời gian thực', inline: false }
+                    { name: '✨ Tính năng', value: '• Tìm kiếm bài hát trực tiếp\n• Tua bài hát theo từng giây\n• Tăng giảm âm lượng & xáo trộn\n• Chế độ toàn màn hình Theater Mode', inline: false }
                 )
                 .setThumbnail('https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&h=100&fit=crop');
 
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
-                    .setLabel('Mở Craftopia Dashboard')
+                    .setLabel('Mở Web Dashboard')
                     .setStyle(ButtonStyle.Link)
                     .setURL(dashboardUrl)
                     .setEmoji('🎧')
@@ -175,9 +176,9 @@ class DiscordMusicBot {
 
                     const row = new ActionRowBuilder().addComponents(
                         new ButtonBuilder()
-                            .setLabel('Mở Craftopia Dashboard')
+                            .setLabel('Mở Web Dashboard')
                             .setStyle(ButtonStyle.Link)
-                            .setURL(`http://localhost:${config.port}?guild=${guildId}`)
+                            .setURL(dashboardUrl)
                             .setEmoji('🎧')
                     );
 
@@ -251,7 +252,7 @@ class DiscordMusicBot {
                     new ButtonBuilder()
                         .setLabel('Điều khiển trên Dashboard')
                         .setStyle(ButtonStyle.Link)
-                        .setURL(`http://localhost:${config.port}?guild=${guildId}`)
+                        .setURL(dashboardUrl)
                         .setEmoji('🎧')
                 );
 
@@ -285,7 +286,7 @@ class DiscordMusicBot {
                     new ButtonBuilder()
                         .setLabel('Quản lý Queue trên Dashboard')
                         .setStyle(ButtonStyle.Link)
-                        .setURL(`http://localhost:${config.port}?guild=${guildId}`)
+                        .setURL(dashboardUrl)
                         .setEmoji('🎧')
                 );
 
