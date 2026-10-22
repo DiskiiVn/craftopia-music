@@ -10,7 +10,7 @@ module.exports = {
 
     // Domain & Web Dashboard Configuration
     domain: domain,
-    port: parseInt(process.env.PORT, 10) || 3000,
+    port: parseInt(process.env.SERVER_PORT || process.env.PORT, 10) || 3000,
     redirectUri: process.env.REDIRECT_URI || `${domain}/api/auth/callback`,
     sessionSecret: process.env.SESSION_SECRET || 'craftopia_music_secret_2026',
 
