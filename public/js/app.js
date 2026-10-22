@@ -330,12 +330,29 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // --- Tab Navigation ---
 function setupTabNavigation() {
-    navItems.forEach(item => {
+    document.querySelectorAll('.nav-item, .mobile-nav-item').forEach(item => {
         item.addEventListener('click', () => {
             const targetTab = item.getAttribute('data-tab');
-            switchTab(targetTab);
+            if (targetTab) switchTab(targetTab);
         });
     });
+
+    const mobileBtnVoice = document.getElementById('mobile-btn-voice');
+    if (mobileBtnVoice) {
+        mobileBtnVoice.addEventListener('click', () => {
+            btnOpenVoiceModal.click();
+        });
+    }
+
+    const playerLeftTouch = document.getElementById('player-left-touch');
+    if (playerLeftTouch) {
+        playerLeftTouch.addEventListener('click', (e) => {
+            if (e.target.closest('#bar-heart-btn')) return;
+            if (window.innerWidth <= 768) {
+                btnToggleTheater.click();
+            }
+        });
+    }
 
     heroSearchShortcut.addEventListener('click', () => {
         switchTab('tab-search');
@@ -344,7 +361,7 @@ function setupTabNavigation() {
 }
 
 function switchTab(tabId) {
-    navItems.forEach(item => {
+    document.querySelectorAll('.nav-item, .mobile-nav-item').forEach(item => {
         if (item.getAttribute('data-tab') === tabId) {
             item.classList.add('active');
         } else {
@@ -359,6 +376,9 @@ function switchTab(tabId) {
             view.classList.remove('active');
         }
     });
+
+    const contentBody = document.querySelector('.content-body');
+    if (contentBody) contentBody.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // --- Auth Check & Login Gate ---
@@ -549,6 +569,9 @@ socket.on('tick', (data) => {
         const pct = Math.min(100, Math.max(0, data.progressPercent));
         seekProgress.style.width = `${pct}%`;
         seekThumb.style.left = `${pct}%`;
+
+        const mobileMiniFill = document.getElementById('mobile-mini-fill');
+        if (mobileMiniFill) mobileMiniFill.style.width = `${pct}%`;
     }
 });
 
@@ -660,6 +683,8 @@ function updatePlayerUI(player) {
 
 function renderQueues(queue) {
     if (sidebarQueueCount) sidebarQueueCount.textContent = queue.length;
+    const mobileQueueCount = document.getElementById('mobile-queue-count');
+    if (mobileQueueCount) mobileQueueCount.textContent = queue.length;
     if (queueStatsText) {
         const totalSecs = queue.reduce((acc, t) => acc + (t.durationSeconds || 0), 0);
         queueStatsText.textContent = `${queue.length} bài hát trong hàng đợi • Tổng thời lượng: ${formatDuration(totalSecs)}`;

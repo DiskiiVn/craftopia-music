@@ -2250,33 +2250,537 @@ body {
     margin-top: 4px;
 }
 
+.mobile-header-brand {
+    display: none;
+}
+
+.mobile-bottom-nav {
+    display: none;
+}
+
+.mobile-mini-progress {
+    display: none;
+}
+
 /* ====================================================
-   RESPONSIVE DESIGN
+   MOBILE RESPONSIVE DESIGN (Smartphone & Tablet)
    ==================================================== */
-@media (max-width: 900px) {
+@media (max-width: 768px) {
+    body {
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+    }
+
+    .app-container {
+        padding: 0;
+        height: calc(100dvh - 122px);
+        gap: 0;
+    }
+
     .sidebar {
+        display: none !important;
+    }
+
+    .main-view {
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+        background: #08090f;
+    }
+
+    /* Top Header on Mobile */
+    .top-header {
+        height: 56px;
+        padding: 0 14px;
+        gap: 10px;
+    }
+
+    .mobile-header-brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+
+    .mobile-mini-icon {
+        width: 32px !important;
+        height: 32px !important;
+        border-radius: 8px !important;
+    }
+
+    .mobile-brand-title {
+        font-size: 16px !important;
+        font-weight: 900;
+    }
+
+    .header-left {
+        display: none; /* Mobile uses Tab Search */
+    }
+
+    .header-right {
+        margin-left: auto;
+        gap: 8px;
+    }
+
+    .guild-dropdown {
+        padding: 6px 26px 6px 30px;
+        font-size: 12px;
+        max-width: 140px;
+        height: 34px;
+    }
+
+    .user-badge {
+        padding: 3px;
+        border-radius: 50%;
+    }
+
+    .user-badge span {
         display: none;
     }
+
+    .user-badge img {
+        width: 30px;
+        height: 30px;
+    }
+
+    .user-status-dot {
+        position: absolute;
+        bottom: 2px;
+        right: 2px;
+        width: 8px;
+        height: 8px;
+        border: 2px solid #10131e;
+    }
+
+    /* Scrollable Content */
+    .content-body {
+        padding: 16px 14px 28px 14px;
+    }
+
+    /* Hero Canvas on Mobile */
     .hero-canvas {
         flex-direction: column;
         align-items: center;
         text-align: center;
-        padding: 32px 20px;
+        padding: 22px 16px;
+        gap: 18px;
+        margin-bottom: 28px;
+        border-radius: var(--radius-lg);
     }
+
+    .vinyl-container {
+        width: 160px;
+        height: 160px;
+    }
+
+    .vinyl-disc {
+        width: 150px;
+        height: 150px;
+    }
+
+    .vinyl-disc.spinning {
+        transform: translateX(25px);
+    }
+
+    .vinyl-center-label {
+        width: 54px;
+        height: 54px;
+    }
+
+    .vinyl-center-hole {
+        width: 12px;
+        height: 12px;
+    }
+
+    .hero-art-wrapper {
+        width: 160px;
+        height: 160px;
+        border-radius: var(--radius-md);
+    }
+
     .hero-info {
         align-items: center;
+        width: 100%;
+        gap: 8px;
     }
+
+    .hero-tag-row {
+        justify-content: center;
+        gap: 6px;
+    }
+
+    .hero-title {
+        font-size: 22px;
+        letter-spacing: -0.4px;
+        white-space: normal;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .hero-artist {
+        font-size: 14px;
+        white-space: normal;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+
+    .hero-meta {
+        font-size: 11.5px;
+    }
+
     .hero-actions {
         justify-content: center;
+        gap: 8px;
+        width: 100%;
+        margin-top: 6px;
     }
+
+    .btn-hero-play {
+        width: 52px;
+        height: 52px;
+    }
+
+    .btn-hero-play svg {
+        width: 22px;
+        height: 22px;
+    }
+
+    .btn-pill {
+        padding: 9px 16px;
+        font-size: 12px;
+    }
+
+    /* Curated Mixes on Mobile */
+    .curated-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .curated-card {
+        min-height: 110px;
+        padding: 16px 18px;
+    }
+
+    .curated-title {
+        font-size: 16px;
+    }
+
+    .curated-play-fab {
+        opacity: 1;
+        transform: none;
+        width: 38px;
+        height: 38px;
+    }
+
+    .curated-play-fab svg {
+        width: 18px;
+        height: 18px;
+    }
+
+    /* Hot Tracks Grid on Mobile */
+    .hot-tracks-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .hot-track-item {
+        padding: 8px 12px;
+    }
+
+    .hot-track-thumb-wrap {
+        width: 44px;
+        height: 44px;
+    }
+
+    .hot-track-title {
+        font-size: 13px;
+    }
+
+    /* Table on Mobile */
+    .spotify-table th:nth-child(3),
+    .spotify-table td:nth-child(3),
+    .spotify-table th:nth-child(4),
+    .spotify-table td:nth-child(4) {
+        display: none; /* Hide Duration & Requester on phone */
+    }
+
+    .spotify-table th,
+    .spotify-table td {
+        padding: 10px 12px;
+    }
+
+    .track-meta-title {
+        max-width: 180px;
+        font-size: 13px;
+    }
+
+    /* Genre Tiles (Search Tab) */
+    .genre-tiles-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+
+    .genre-tile {
+        height: 85px;
+        padding: 12px;
+    }
+
+    .genre-tile span {
+        font-size: 15px;
+    }
+
+    .genre-tile .tile-icon {
+        font-size: 32px;
+    }
+
+    .search-results-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+
+    .song-card {
+        padding: 10px;
+    }
+
+    .song-card-title {
+        font-size: 13px;
+    }
+
+    .song-card-artist {
+        font-size: 11.5px;
+    }
+
+    .card-play-btn {
+        opacity: 1;
+        transform: none;
+        width: 40px;
+        height: 40px;
+        bottom: 8px;
+        right: 8px;
+    }
+
+    .card-play-btn svg {
+        width: 18px;
+        height: 18px;
+    }
+
+    /* FLOATING MINI-PLAYER (Docked above bottom nav) */
+    .player-bar {
+        position: fixed;
+        bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+        left: 8px;
+        right: 8px;
+        height: 56px;
+        border-radius: 14px;
+        background: rgba(18, 22, 34, 0.95);
+        backdrop-filter: blur(24px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+        padding: 0 12px;
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .mobile-mini-progress {
+        display: block;
+        position: absolute;
+        top: 0;
+        left: 12px;
+        right: 12px;
+        height: 2px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 2px;
+        overflow: hidden;
+    }
+
+    .mobile-mini-fill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #10b981 0%, #06b6d4 100%);
+        transition: width 0.3s ease;
+    }
+
     .player-left {
         width: auto;
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        gap: 10px;
+        cursor: pointer;
     }
+
+    .player-thumb-wrap {
+        width: 40px;
+        height: 40px;
+    }
+
+    .player-heart {
+        display: none;
+    }
+
+    .player-title {
+        font-size: 13px;
+    }
+
+    .player-artist {
+        font-size: 11px;
+    }
+
     .player-center {
         width: auto;
-        flex: 1;
+        flex: 0;
+        flex-direction: row;
+        align-items: center;
+        gap: 8px;
     }
+
+    .player-seekbar-wrap {
+        display: none;
+    }
+
+    .player-controls {
+        gap: 6px;
+    }
+
+    .btn-ctrl {
+        display: none;
+    }
+
+    .btn-ctrl#btn-ctrl-next {
+        display: flex;
+        padding: 4px;
+    }
+
+    .btn-play-pause {
+        width: 38px;
+        height: 38px;
+    }
+
+    .btn-play-pause svg {
+        width: 18px;
+        height: 18px;
+    }
+
     .player-right {
         display: none;
+    }
+
+    /* MOBILE BOTTOM NAVIGATION BAR */
+    .mobile-bottom-nav {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: calc(56px + env(safe-area-inset-bottom, 0px));
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        background: rgba(10, 12, 19, 0.98);
+        backdrop-filter: blur(28px);
+        border-top: 1px solid var(--border-glass);
+        display: flex;
+        align-items: center;
+        justify-content: space-around;
+        z-index: 1001;
+    }
+
+    .mobile-nav-item {
+        flex: 1;
+        height: 100%;
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        font-size: 10.5px;
+        font-weight: 700;
+        font-family: inherit;
+        cursor: pointer;
+        transition: color 0.2s;
+        position: relative;
+    }
+
+    .mobile-nav-item svg {
+        width: 20px;
+        height: 20px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2.2;
+    }
+
+    .mobile-nav-item.active {
+        color: var(--primary-light);
+    }
+
+    .mobile-badge-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .mobile-badge-count {
+        position: absolute;
+        top: -4px;
+        right: -8px;
+        background: var(--primary);
+        color: #000;
+        font-size: 9px;
+        font-weight: 800;
+        padding: 1px 5px;
+        border-radius: var(--radius-full);
+    }
+
+    /* Theater Mode on Mobile */
+    .theater-overlay {
+        padding: 24px 20px;
+        justify-content: space-between;
+    }
+
+    .theater-body {
+        flex-direction: column;
+        gap: 24px;
+        text-align: center;
+    }
+
+    .theater-art-container {
+        width: 240px;
+        height: 240px;
+    }
+
+    .theater-title {
+        font-size: 24px;
+        line-height: 1.2;
+    }
+
+    .theater-artist {
+        font-size: 16px;
+        margin-bottom: 20px;
+    }
+
+    .theater-controls-row {
+        justify-content: center;
+    }
+
+    /* Login Gate on Mobile */
+    .login-gate-card {
+        padding: 32px 20px;
+        gap: 14px;
+    }
+
+    .login-title {
+        font-size: 24px;
+    }
+
+    .btn-discord-login {
+        padding: 14px 20px;
+        font-size: 14px;
     }
 }
