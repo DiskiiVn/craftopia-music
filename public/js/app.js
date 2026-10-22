@@ -1,5 +1,11 @@
 // Craftopia Music Dashboard Client
-const socket = io();
+const BACKEND_URL = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+    ? ''
+    : (localStorage.getItem('craftopia_backend_url') || 'https://craftopia-music.onrender.com');
+
+const socket = io(BACKEND_URL, {
+    transports: ['websocket', 'polling']
+});
 
 // State
 let currentGuildId = localStorage.getItem('craftopia_selected_guild') || null;
@@ -134,7 +140,7 @@ async function triggerSearch(query) {
     searchStatus.innerHTML = `<span style="color:var(--primary-light);">⏳ Đang tìm kiếm "${query}" trên YouTube...</span>`;
 
     try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        const res = await fetch(`${BACKEND_URL}/api/search?q=${encodeURIComponent(query)}`);
         const data = await res.json();
         renderSearchResults(data.results || []);
     } catch (err) {
@@ -201,7 +207,7 @@ window.playSongByIndex = async (index) => {
 
     try {
         showToast(`Đang gửi yêu cầu phát: ${song.title}...`, '⏳');
-        const res = await fetch(`/api/guilds/${currentGuildId}/play`, {
+        const res = await fetch(`${BACKEND_URL}/api/guilds/${currentGuildId}/play`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -278,14 +284,14 @@ function switchTab(tabId) {
 // --- Auth Check ---
 async function checkAuth() {
     try {
-        const res = await fetch('/api/auth/me');
+        const res = await fetch(`${BACKEND_URL}/api/auth/me`);
         const data = await res.json();
         if (data && data.user) {
             userName.textContent = data.user.username;
             if (data.user.avatar) userAvatar.src = data.user.avatar;
             if (!data.loggedIn) {
                 userBadgeBtn.addEventListener('click', () => {
-                    window.location.href = '/api/auth/login';
+                    window.location.href = `${BACKEND_URL}/api/auth/login`;
                 });
             }
         }
@@ -297,7 +303,7 @@ async function checkAuth() {
 // --- Guilds Loading & Selection with Auto-Retry ---
 async function loadGuilds() {
     try {
-        const res = await fetch('/api/guilds');
+        const res = await fetch(`${BACKEND_URL}/api/guilds`);
         const data = await res.json();
         const guilds = data.guilds || [];
 
@@ -373,7 +379,7 @@ function selectGuild(guildId, force = false) {
 
 async function fetchGuildDetails(guildId) {
     try {
-        const res = await fetch(`/api/guilds/${guildId}`);
+        const res = await fetch(`${BACKEND_URL}/api/guilds/${guildId}`);
         const data = await res.json();
         if (data.voiceChannels) {
             populateVoiceSelect(data.voiceChannels);
@@ -419,7 +425,7 @@ btnModalConnect.addEventListener('click', async () => {
 
     btnModalConnect.textContent = 'Đang kết nối...';
     try {
-        await fetch(`/api/guilds/${currentGuildId}/join`, {
+        await fetch(`${BACKEND_URL}/api/guilds/${currentGuildId}/join`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ voiceChannelId: channelId })
@@ -630,7 +636,7 @@ async function sendControl(action, value = null) {
         return;
     }
     try {
-        await fetch(`/api/guilds/${currentGuildId}/control`, {
+        await fetch(`${BACKEND_URL}/api/guilds/${currentGuildId}/control`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action, value })
