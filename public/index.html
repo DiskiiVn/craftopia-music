@@ -5,16 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Craftopia Music · Trình Điều Khiển Bot Nhạc Discord Cao Cấp</title>
     <link rel="icon" type="image/png" href="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&h=100&fit=crop">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/spotify.css">
 </head>
 <body>
+    <!-- Background Ambient Glows -->
+    <div class="ambient-glow glow-1"></div>
+    <div class="ambient-glow glow-2"></div>
+    <div class="ambient-glow glow-3"></div>
+
     <div class="app-container">
         <!-- Sidebar -->
         <aside class="sidebar">
             <!-- Brand -->
             <div class="brand">
                 <div class="brand-icon">
-                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <div class="brand-pulse"></div>
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
                         <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
                         <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
@@ -22,7 +31,7 @@
                 </div>
                 <div class="brand-text-wrap">
                     <span class="brand-name">Craftopia</span>
-                    <span class="brand-sub">Music Player</span>
+                    <span class="brand-sub">Studio Music Player</span>
                 </div>
             </div>
 
@@ -34,18 +43,22 @@
                 </li>
                 <li class="nav-item" data-tab="tab-search">
                     <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                    <span>Tìm kiếm & Khám phá</span>
+                    <span>Khám phá & Tìm kiếm</span>
                 </li>
                 <li class="nav-item" data-tab="tab-queue">
                     <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
                     <span>Hàng đợi (Queue)</span>
+                    <span class="nav-badge" id="sidebar-queue-count">0</span>
                 </li>
             </ul>
 
             <!-- Server Library Section -->
             <div class="sidebar-library">
                 <div class="library-header">
-                    <span>Server Discord</span>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                        <span>Server Discord</span>
+                    </div>
                     <span class="badge-counter" id="guild-count-badge">0</span>
                 </div>
                 <div class="guild-list" id="guild-list">
@@ -53,22 +66,40 @@
                 </div>
             </div>
 
-            <!-- Voice Channel Status Box -->
+            <!-- Voice Channel Status Module -->
             <div class="voice-status-box" id="voice-box">
                 <div class="voice-status-indicator">
-                    <div class="status-dot"></div>
-                    <div>
-                        <div style="font-weight:800; font-size:13px;" id="voice-channel-name">Chưa kết nối</div>
-                        <div style="color:var(--text-muted); font-size:11.5px;" id="voice-channel-sub">Bấm để tham gia</div>
+                    <div class="status-pulse-dot"></div>
+                    <div class="voice-info-col">
+                        <div class="voice-title-row">
+                            <span class="voice-title" id="voice-channel-name">Chưa kết nối</span>
+                        </div>
+                        <span class="voice-sub" id="voice-channel-sub">Bấm để tham gia voice</span>
                     </div>
                 </div>
-                <button class="btn-pill" id="btn-open-voice-modal" style="padding:6px 14px; font-size:12px;">Kênh</button>
+                <button class="btn-voice-join" id="btn-open-voice-modal" title="Chọn kênh thoại">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+                    <span>Kênh</span>
+                </button>
+            </div>
+
+            <!-- Bot System Stats Widget -->
+            <div class="sidebar-system-card">
+                <div class="sys-row">
+                    <span class="sys-label">⚡ Hệ thống bot</span>
+                    <span class="sys-badge online">● Online 24/7</span>
+                </div>
+                <div class="sys-specs">
+                    <span>Âm thanh 320kbps HD</span>
+                    <span>•</span>
+                    <span>Lossless Stereo</span>
+                </div>
             </div>
         </aside>
 
         <!-- Main View Area -->
         <main class="main-view">
-            <!-- Top Sticky Header -->
+            <!-- Top Sticky Glass Header -->
             <header class="top-header">
                 <div class="header-left">
                     <div class="search-box">
@@ -76,18 +107,23 @@
                             <circle cx="11" cy="11" r="8"></circle>
                             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                         </svg>
-                        <input type="text" id="top-search-input" placeholder="Tìm bài hát, nghệ sĩ hoặc dán link YouTube..." autocomplete="off">
+                        <input type="text" id="top-search-input" placeholder="Tìm kiếm bài hát, ca sĩ, link YouTube..." autocomplete="off">
+                        <div class="search-key-hint">Enter ↵</div>
                     </div>
                 </div>
 
                 <div class="header-right">
-                    <select class="guild-dropdown" id="guild-select">
-                        <option value="">Chọn Server Discord...</option>
-                    </select>
+                    <div class="guild-dropdown-wrap">
+                        <svg class="dropdown-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19.27 5.33C17.94 4.71 16.5 4.26 15 4a.09.09 0 0 0-.07.03c-.18.33-.39.76-.53 1.09a16.09 16.09 0 0 0-4.8 0c-.14-.34-.35-.76-.54-1.09-.01-.02-.04-.03-.07-.03-1.5.26-2.93.71-4.27 1.33-.01 0-.02.01-.03.02-2.72 4.07-3.47 8.03-3.1 11.95 0 .02.01.04.03.05 1.8 1.32 3.53 2.12 5.24 2.65.03.01.06 0 .07-.02.4-.55.76-1.13 1.07-1.74.02-.04 0-.08-.04-.09-.57-.22-1.11-.48-1.64-.78-.04-.02-.04-.08-.01-.11.11-.08.22-.17.33-.25.02-.02.05-.02.07-.01 3.44 1.57 7.15 1.57 10.55 0 .02-.01.05-.01.07.01.11.09.22.17.33.26.04.03.04.09-.01.11-.52.31-1.07.56-1.64.78-.04.01-.05.06-.04.09.32.61.68 1.19 1.07 1.74.03.01.06.02.09.01 1.72-.53 3.45-1.33 5.25-2.65.02-.01.03-.03.03-.05.44-4.53-.73-8.46-3.1-11.95-.01-.01-.02-.02-.04-.02z"/></svg>
+                        <select class="guild-dropdown" id="guild-select">
+                            <option value="">Chọn Server Discord...</option>
+                        </select>
+                    </div>
 
                     <div class="user-badge" id="user-badge-btn" title="Đăng nhập tài khoản Discord">
                         <img id="user-avatar" src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Avatar">
                         <span id="user-name">Đăng nhập</span>
+                        <div class="user-status-dot"></div>
                     </div>
                 </div>
             </header>
@@ -98,10 +134,19 @@
                 <div class="tab-view active" id="tab-home">
                     <!-- Hero Showcase Banner with Vinyl Record Effect -->
                     <div class="hero-canvas" id="hero-banner">
+                        <div class="hero-bg-art" id="hero-bg-art"></div>
+                        <div class="hero-mesh-overlay"></div>
+
                         <div class="vinyl-container">
-                            <div class="vinyl-disc" id="vinyl-disc"></div>
+                            <div class="vinyl-disc" id="vinyl-disc">
+                                <div class="vinyl-shine"></div>
+                                <div class="vinyl-center-label">
+                                    <div class="vinyl-center-hole"></div>
+                                </div>
+                            </div>
                             <div class="hero-art-wrapper">
                                 <img class="hero-art" id="hero-art" src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&h=500&fit=crop" alt="Artwork">
+                                <div class="art-overlay-glass"></div>
                             </div>
                         </div>
 
@@ -118,105 +163,253 @@
                                         <div class="bar"></div>
                                         <div class="bar"></div>
                                     </div>
-                                    <span id="hero-status-label">CRAFTOPIA MUSIC PLAYER</span>
+                                    <span id="hero-status-label">CRAFTOPIA MUSIC STUDIO</span>
                                 </div>
-                                <span class="badge-tech">DISCORD HD AUDIO</span>
-                                <span class="badge-tech">LOSSLESS</span>
+                                <span class="badge-tech glow">320 KBPS HD AUDIO</span>
+                                <span class="badge-tech">LOSSLESS STEREO</span>
                             </div>
 
                             <h1 class="hero-title" id="hero-title">Chưa có bài hát nào đang phát</h1>
-                            <div class="hero-artist" id="hero-artist">Hãy tìm kiếm bài hát hoặc gõ /play trên Discord để bắt đầu</div>
-                            <div class="hero-meta" id="hero-meta">Yêu cầu bởi: Dashboard • Sẵn sàng kết nối</div>
+                            <div class="hero-artist" id="hero-artist">Khám phá danh sách bài hát hot bên dưới hoặc gõ lệnh /play trên Discord để quẩy nhạc!</div>
+                            <div class="hero-meta" id="hero-meta">Yêu cầu bởi: Dashboard • Sẵn sàng kết nối kênh thoại</div>
 
                             <div class="hero-actions">
                                 <button class="btn-hero-play" id="hero-play-btn" title="Phát / Tạm dừng">
                                     <svg viewBox="0 0 24 24" id="hero-play-icon"><path d="M8 5v14l11-7z"/></svg>
                                 </button>
-                                <button class="btn-pill" id="hero-skip-btn">Bỏ qua (Next)</button>
-                                <button class="btn-pill" id="hero-theater-btn">✨ Toàn màn hình</button>
-                                <button class="btn-pill" id="hero-search-shortcut">🔍 Khám phá bài mới</button>
+                                <button class="btn-pill btn-pill-accent" id="hero-skip-btn">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+                                    <span>Bỏ qua bài (Next)</span>
+                                </button>
+                                <button class="btn-pill" id="hero-theater-btn">
+                                    <span>✨ Toàn màn hình</span>
+                                </button>
+                                <button class="btn-pill" id="hero-search-shortcut">
+                                    <span>🔍 Khám phá bài mới</span>
+                                </button>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Upcoming Queue Preview -->
-                    <h2 class="section-title">Bài hát tiếp theo trong hàng đợi</h2>
-                    <table class="spotify-table" id="home-queue-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 44px;">#</th>
-                                <th>Tiêu đề & Nghệ sĩ</th>
-                                <th>Thời lượng</th>
-                                <th>Yêu cầu bởi</th>
-                                <th style="text-align: right;">Hành động</th>
-                            </tr>
-                        </thead>
-                        <tbody id="home-queue-tbody">
-                            <tr>
-                                <td colspan="5" style="text-align:center; color:var(--text-muted); padding: 40px;">
-                                    Hàng đợi hiện đang trống. Hãy nhập tên bài hát vào thanh tìm kiếm phía trên để thêm bài!
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <!-- SECTION: TRENDING & HOT GENRES -->
+                    <div class="home-section">
+                        <div class="section-header">
+                            <div>
+                                <h2 class="section-title">🔥 Tuyển Tập Thịnh Hành</h2>
+                                <p class="section-sub">Click để phát ngay vào phòng voice Discord của bạn</p>
+                            </div>
+                            <button class="btn-text-link" onclick="switchTab('tab-search')">Xem tất cả →</button>
+                        </div>
+
+                        <div class="curated-grid">
+                            <div class="curated-card card-vpop" onclick="playTrendingPlaylist('Top Vietnamese Hits 2026')">
+                                <div class="curated-glow"></div>
+                                <div class="curated-content">
+                                    <span class="curated-tag">THỊNH HÀNH</span>
+                                    <h3 class="curated-title">V-Pop Hot Hits 2026</h3>
+                                    <p class="curated-desc">Tăng Duy Tân, Sơn Tùng, HIEUTHUHAI, Vũ</p>
+                                </div>
+                                <button class="curated-play-fab" title="Phát ngay">
+                                    <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                </button>
+                            </div>
+
+                            <div class="curated-card card-lofi" onclick="playTrendingPlaylist('Lofi chillhop beats to relax study')">
+                                <div class="curated-glow"></div>
+                                <div class="curated-content">
+                                    <span class="curated-tag">CHILL & CODE</span>
+                                    <h3 class="curated-title">Midnight Lofi Beats</h3>
+                                    <p class="curated-desc">Giai điệu thư giãn nhẹ nhàng, tập trung học tập</p>
+                                </div>
+                                <button class="curated-play-fab" title="Phát ngay">
+                                    <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                </button>
+                            </div>
+
+                            <div class="curated-card card-gaming" onclick="playTrendingPlaylist('Gaming NCS Best Mix Bass Boosted')">
+                                <div class="curated-glow"></div>
+                                <div class="curated-content">
+                                    <span class="curated-tag">CHIẾN GAME</span>
+                                    <h3 class="curated-title">Gaming NCS Bass Boost</h3>
+                                    <p class="curated-desc">Nhạc leo rank cực căng cùng anh em Discord</p>
+                                </div>
+                                <button class="curated-play-fab" title="Phát ngay">
+                                    <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                </button>
+                            </div>
+
+                            <div class="curated-card card-edm" onclick="playTrendingPlaylist('EDM Ultra Festival Remix 2026')">
+                                <div class="curated-glow"></div>
+                                <div class="curated-content">
+                                    <span class="curated-tag">SÔI ĐỘNG</span>
+                                    <h3 class="curated-title">EDM Club Festival</h3>
+                                    <p class="curated-desc">Vinahouse, Progressive House, Bass Drops</p>
+                                </div>
+                                <button class="curated-play-fab" title="Phát ngay">
+                                    <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION: SUGGESTED POPULAR TRACKS (Click-to-Play Instant) -->
+                    <div class="home-section">
+                        <div class="section-header">
+                            <div>
+                                <h2 class="section-title">🎧 Gợi Ý Bài Hát Đang Hot Hôm Nay</h2>
+                                <p class="section-sub">Bấm vào bất kỳ bài hát nào để bot phát tức thì</p>
+                            </div>
+                        </div>
+
+                        <div class="hot-tracks-grid" id="hot-tracks-container">
+                            <!-- Populated with beautiful track cards -->
+                        </div>
+                    </div>
+
+                    <!-- SECTION: UPCOMING QUEUE PREVIEW -->
+                    <div class="home-section">
+                        <div class="section-header">
+                            <div>
+                                <h2 class="section-title">📋 Bài Hát Tiếp Theo Trong Hàng Đợi</h2>
+                                <p class="section-sub">Danh sách chờ phát tiếp theo</p>
+                            </div>
+                            <button class="btn-text-link" onclick="switchTab('tab-queue')">Mở toàn bộ hàng đợi →</button>
+                        </div>
+
+                        <div class="table-container">
+                            <table class="spotify-table" id="home-queue-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50px;">#</th>
+                                        <th>Tiêu đề & Nghệ sĩ</th>
+                                        <th>Thời lượng</th>
+                                        <th>Người yêu cầu</th>
+                                        <th style="text-align: right;">Hành động</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="home-queue-tbody">
+                                    <tr>
+                                        <td colspan="5" style="text-align:center; color:var(--text-muted); padding: 48px;">
+                                            <div class="empty-queue-art">
+                                                <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>
+                                                <p style="margin-top:12px; font-weight:600; color:var(--text-secondary);">Hàng đợi hiện đang trống</p>
+                                                <span style="font-size:12.5px;">Hãy chọn bài hát gợi ý phía trên hoặc gõ tên bài vào ô tìm kiếm để phát!</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- TAB 2: SEARCH -->
                 <div class="tab-view" id="tab-search">
-                    <div class="category-chips-wrap">
-                        <button class="chip-btn" onclick="quickSearch('Top Vietnamese Hits 2026')">🔥 V-Pop Thịnh Hành</button>
-                        <button class="chip-btn" onclick="quickSearch('Gaming Music NCS Mix')">🎮 Gaming NCS</button>
-                        <button class="chip-btn" onclick="quickSearch('Lofi chillhop beats to study')">☕ Lofi Chillout</button>
-                        <button class="chip-btn" onclick="quickSearch('EDM Festival Remix')">⚡ EDM Remix</button>
-                        <button class="chip-btn" onclick="quickSearch('Anime OST Epic Theme')">🎌 Anime Music</button>
+                    <div class="search-category-banner">
+                        <h2 class="section-title" style="margin-bottom:8px;">Duyệt Tìm Theo Thể Loại</h2>
+                        <p class="section-sub" style="margin-bottom:20px;">Khám phá các phong cách âm nhạc đa dạng</p>
+                        
+                        <div class="genre-tiles-grid">
+                            <div class="genre-tile tile-1" onclick="quickSearch('V-Pop Thịnh Hành 2026')">
+                                <span>V-Pop Hot</span>
+                                <div class="tile-icon">🇻🇳</div>
+                            </div>
+                            <div class="genre-tile tile-2" onclick="quickSearch('US UK Billboard Top Hits')">
+                                <span>US-UK Hits</span>
+                                <div class="tile-icon">🌎</div>
+                            </div>
+                            <div class="genre-tile tile-3" onclick="quickSearch('Lofi Hip Hop Chillhop')">
+                                <span>Lofi Chill</span>
+                                <div class="tile-icon">☕</div>
+                            </div>
+                            <div class="genre-tile tile-4" onclick="quickSearch('Gaming Music NCS Mix')">
+                                <span>Gaming Mix</span>
+                                <div class="tile-icon">🎮</div>
+                            </div>
+                            <div class="genre-tile tile-5" onclick="quickSearch('EDM Bass Boosted 2026')">
+                                <span>EDM Bass</span>
+                                <div class="tile-icon">⚡</div>
+                            </div>
+                            <div class="genre-tile tile-6" onclick="quickSearch('Anime OST Epic Theme Songs')">
+                                <span>Anime OST</span>
+                                <div class="tile-icon">🎌</div>
+                            </div>
+                            <div class="genre-tile tile-7" onclick="quickSearch('Acoustic Ballad Guitar')">
+                                <span>Acoustic</span>
+                                <div class="tile-icon">🎸</div>
+                            </div>
+                            <div class="genre-tile tile-8" onclick="quickSearch('Rap Viet Underground Hot')">
+                                <span>Rap Việt</span>
+                                <div class="tile-icon">🎤</div>
+                            </div>
+                        </div>
                     </div>
 
-                    <h2 class="section-title">Kết quả tìm kiếm</h2>
-                    <div id="search-status" style="color:var(--text-muted); margin-bottom:16px;">Nhập từ khoá vào thanh tìm kiếm hoặc chọn chủ đề phía trên...</div>
-                    <div class="search-results-grid" id="search-results-grid">
-                        <!-- Populated dynamically -->
+                    <div class="search-results-section" style="margin-top: 36px;">
+                        <div class="section-header">
+                            <div>
+                                <h2 class="section-title">Kết Quả Tìm Kiếm</h2>
+                                <div id="search-status" class="section-sub">Nhập từ khoá vào thanh tìm kiếm phía trên hoặc chọn thể loại để tìm bài...</div>
+                            </div>
+                        </div>
+
+                        <div class="search-results-grid" id="search-results-grid">
+                            <!-- Populated dynamically -->
+                        </div>
                     </div>
                 </div>
 
                 <!-- TAB 3: QUEUE -->
                 <div class="tab-view" id="tab-queue">
-                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 22px;">
-                        <h2 class="section-title" style="margin-bottom:0;">Danh sách chờ (Queue)</h2>
+                    <div class="queue-header-row">
+                        <div>
+                            <h2 class="section-title" style="margin-bottom:4px;">Danh Sách Chờ Phát (Queue)</h2>
+                            <p class="section-sub" id="queue-stats-text">0 bài hát trong hàng đợi</p>
+                        </div>
                         <div style="display:flex; gap:12px;">
-                            <button class="btn-pill" id="queue-shuffle-btn">🔀 Xáo trộn</button>
-                            <button class="btn-pill" id="queue-clear-btn" style="color:#f87171; border-color:rgba(248,113,113,0.3);">Xoá toàn bộ hàng đợi</button>
+                            <button class="btn-pill" id="queue-shuffle-btn">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+                                <span>Xáo trộn</span>
+                            </button>
+                            <button class="btn-pill btn-pill-danger" id="queue-clear-btn">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                                <span>Xoá toàn bộ hàng đợi</span>
+                            </button>
                         </div>
                     </div>
 
-                    <table class="spotify-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 44px;">#</th>
-                                <th>Bài hát</th>
-                                <th>Thời lượng</th>
-                                <th>Yêu cầu bởi</th>
-                                <th style="text-align: right;">Hành động</th>
-                            </tr>
-                        </thead>
-                        <tbody id="full-queue-tbody">
-                            <!-- Populated dynamically -->
-                        </tbody>
-                    </table>
+                    <div class="table-container" style="margin-top:20px;">
+                        <table class="spotify-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;">#</th>
+                                    <th>Bài hát & Nghệ sĩ</th>
+                                    <th>Thời lượng</th>
+                                    <th>Yêu cầu bởi</th>
+                                    <th style="text-align: right;">Hành động</th>
+                                </tr>
+                            </thead>
+                            <tbody id="full-queue-tbody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- PERSISTENT BOTTOM PLAYER BAR (The Masterpiece) -->
+    <!-- PERSISTENT BOTTOM PLAYER BAR (Floating Luxury Glass Dock) -->
     <footer class="player-bar">
         <!-- Left: Track info -->
         <div class="player-left">
             <div class="player-thumb-wrap">
                 <img class="player-thumb" id="bar-thumb" src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&h=100&fit=crop" alt="Thumbnail">
+                <div class="player-thumb-glow"></div>
             </div>
             <div class="player-track-info">
                 <div class="player-title" id="bar-title">Chưa phát nhạc</div>
-                <div class="player-artist" id="bar-artist">Craftopia Music</div>
+                <div class="player-artist" id="bar-artist">Craftopia Music Studio</div>
             </div>
             <button class="player-heart" id="bar-heart-btn" title="Yêu thích">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
@@ -259,10 +452,13 @@
 
         <!-- Right: Volume, Theater, and Status -->
         <div class="player-right">
-            <span style="font-size:12px; color:var(--text-secondary); font-weight:700;" id="bar-voice-badge">🔊 Kênh thoại</span>
+            <span class="player-voice-pill" id="bar-voice-badge">
+                <span class="pill-dot"></span>
+                <span>🔊 Kênh thoại</span>
+            </span>
             
             <button class="btn-ctrl" id="btn-toggle-theater" title="Chế độ Toàn màn hình (Theater Mode)">
-                <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
                 </svg>
             </button>
@@ -284,29 +480,41 @@
     <!-- THEATER / FULLSCREEN IMMERSIVE OVERLAY -->
     <div class="theater-overlay" id="theater-modal">
         <div class="theater-backdrop-blur" id="theater-backdrop"></div>
+        <div class="theater-radial-gradient"></div>
+        
         <div class="theater-header">
             <div class="brand">
-                <div class="brand-icon" style="width:36px; height:36px;">
+                <div class="brand-icon" style="width:38px; height:38px;">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon></svg>
                 </div>
-                <span class="brand-name" style="font-size:18px;">Craftopia Music</span>
+                <div class="brand-text-wrap">
+                    <span class="brand-name" style="font-size:18px;">Craftopia</span>
+                    <span class="brand-sub">Cinema Mode</span>
+                </div>
             </div>
             <button class="btn-pill" id="btn-close-theater">Đóng (Esc)</button>
         </div>
+
         <div class="theater-body">
-            <img class="theater-art" id="theater-art" src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&h=600&fit=crop" alt="Now Playing">
+            <div class="theater-art-container">
+                <img class="theater-art" id="theater-art" src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&h=600&fit=crop" alt="Now Playing">
+                <div class="theater-art-glow"></div>
+            </div>
             <div class="theater-info">
-                <div class="hero-tag-row" style="margin-bottom:12px;">
-                    <span class="badge-tech" style="background:var(--primary); color:#000;">NOW PLAYING</span>
+                <div class="hero-tag-row" style="margin-bottom:14px;">
+                    <span class="badge-tech glow">NOW STREAMING HD</span>
                     <span class="badge-tech" id="theater-voice-badge">🔊 Kênh thoại</span>
                 </div>
-                <h1 style="font-size:46px; font-weight:900; line-height:1.15; margin-bottom:12px;" id="theater-title">Chưa phát nhạc</h1>
-                <div style="font-size:22px; color:var(--text-secondary); margin-bottom:28px;" id="theater-artist">Craftopia Music Player</div>
-                <div style="display:flex; gap:16px;">
-                    <button class="btn-hero-play" id="theater-play-btn" style="width:68px; height:68px;">
-                        <svg viewBox="0 0 24 24" id="theater-play-icon" style="width:30px; height:30px;"><path d="M8 5v14l11-7z"/></svg>
+                <h1 class="theater-title" id="theater-title">Chưa phát nhạc</h1>
+                <div class="theater-artist" id="theater-artist">Craftopia Music Player</div>
+
+                <div class="theater-controls-row">
+                    <button class="btn-hero-play" id="theater-play-btn" style="width:72px; height:72px;">
+                        <svg viewBox="0 0 24 24" id="theater-play-icon" style="width:32px; height:32px;"><path d="M8 5v14l11-7z"/></svg>
                     </button>
-                    <button class="btn-pill" id="theater-skip-btn">Bỏ qua bài này ⏭️</button>
+                    <button class="btn-pill btn-pill-accent" id="theater-skip-btn" style="padding:16px 32px; font-size:15px;">
+                        <span>Bỏ qua bài này ⏭️</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -315,14 +523,19 @@
     <!-- Join Voice Channel Modal -->
     <div class="modal-overlay" id="voice-modal">
         <div class="modal-content">
-            <div class="modal-title">Chọn Kênh Thoại (Voice Channel)</div>
-            <p style="font-size:13.5px; color:var(--text-secondary);">Chọn phòng thoại mà bạn muốn Craftopia Music tham gia để phát nhạc:</p>
-            <select class="voice-select" id="voice-channel-select">
-                <option value="">Đang tải danh sách kênh voice...</option>
-            </select>
-            <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:8px;">
+            <div class="modal-header-row">
+                <div class="modal-title">Chọn Phòng Thoại (Voice)</div>
+                <button class="btn-close-modal" id="btn-modal-close-icon">✕</button>
+            </div>
+            <p style="font-size:13.5px; color:var(--text-secondary); line-height:1.5;">Chọn kênh voice mà bạn muốn Craftopia Music tham gia để phát nhạc trực tiếp:</p>
+            <div class="select-styled-wrap">
+                <select class="voice-select" id="voice-channel-select">
+                    <option value="">Đang tải danh sách kênh voice...</option>
+                </select>
+            </div>
+            <div class="modal-actions-row">
                 <button class="btn-pill" id="btn-modal-cancel">Hủy</button>
-                <button class="btn-pill" id="btn-modal-connect" style="background:var(--primary); color:#000; border:none; font-weight:800;">Tham gia</button>
+                <button class="btn-pill btn-pill-primary" id="btn-modal-connect">Tham gia ngay</button>
             </div>
         </div>
     </div>

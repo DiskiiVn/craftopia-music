@@ -54,6 +54,11 @@ const heroSkipBtn = document.getElementById('hero-skip-btn');
 const heroSearchShortcut = document.getElementById('hero-search-shortcut');
 const heroTheaterBtn = document.getElementById('hero-theater-btn');
 const vinylDisc = document.getElementById('vinyl-disc');
+const heroBgArt = document.getElementById('hero-bg-art');
+const sidebarQueueCount = document.getElementById('sidebar-queue-count');
+const queueStatsText = document.getElementById('queue-stats-text');
+const hotTracksContainer = document.getElementById('hot-tracks-container');
+const btnModalCloseIcon = document.getElementById('btn-modal-close-icon');
 
 // Queue Tables
 const homeQueueTbody = document.getElementById('home-queue-tbody');
@@ -226,6 +231,76 @@ window.playSongByIndex = async (index) => {
     }
 };
 
+// --- Curated Hot Tracks Data ---
+const HOT_TRACKS = [
+    { title: 'Cắt Đôi Nỗi Sầu', artist: 'Tăng Duy Tân, Drum7', duration: '3:05', query: 'Cắt Đôi Nỗi Sầu Tăng Duy Tân', thumb: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=150&h=150&fit=crop' },
+    { title: 'Thiên Lý Ơi', artist: 'Jack - J97', duration: '3:32', query: 'Thiên Lý Ơi Jack J97', thumb: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=150&h=150&fit=crop' },
+    { title: 'Từng Quen', artist: 'Wren Evans', duration: '2:56', query: 'Từng Quen Wren Evans', thumb: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=150&h=150&fit=crop' },
+    { title: 'Nơi Này Có Anh', artist: 'Sơn Tùng M-TP', duration: '4:39', query: 'Nơi Này Có Anh Sơn Tùng M-TP', thumb: 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?w=150&h=150&fit=crop' },
+    { title: 'Waiting For You', artist: 'MONO, Onionn', duration: '4:25', query: 'Waiting For You MONO', thumb: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=150&h=150&fit=crop' },
+    { title: 'Faded (Official)', artist: 'Alan Walker', duration: '3:32', query: 'Alan Walker Faded official', thumb: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=150&h=150&fit=crop' },
+    { title: 'See Tình (Speed Up Remix)', artist: 'Hoàng Thùy Linh', duration: '2:40', query: 'See Tình Hoàng Thùy Linh remix', thumb: 'https://images.unsplash.com/photo-1487180144351-b8472da7d491?w=150&h=150&fit=crop' },
+    { title: 'Nevada (Vicetone)', artist: 'Vicetone, Cozi Zuehlsdorff', duration: '3:28', query: 'Vicetone Nevada monstercat', thumb: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=150&h=150&fit=crop' }
+];
+
+function renderHotTracks() {
+    if (!hotTracksContainer) return;
+    hotTracksContainer.innerHTML = HOT_TRACKS.map(t => `
+        <div class="hot-track-item" onclick="playTrendingSong('${t.query}', '${t.title}')" title="Phát ngay: ${t.title}">
+            <div class="hot-track-thumb-wrap">
+                <img class="hot-track-thumb" src="${t.thumb}" alt="${t.title}">
+                <div class="hot-track-play-hover">
+                    <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                </div>
+            </div>
+            <div class="hot-track-info">
+                <div class="hot-track-title">${t.title}</div>
+                <div class="hot-track-artist">${t.artist}</div>
+            </div>
+            <div class="hot-track-duration">${t.duration}</div>
+        </div>
+    `).join('');
+}
+
+window.playTrendingSong = async (query, title) => {
+    if (!currentGuildId) {
+        showToast('Vui lòng chọn Server Discord trước khi phát bài!', '⚠️');
+        return;
+    }
+    showToast(`Đang tìm kiếm: ${title}...`, '⏳');
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/search?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        const first = data.results && data.results[0];
+        if (!first) {
+            showToast('Không tìm thấy bài hát trên YouTube!', '❌');
+            return;
+        }
+        showToast(`Đang gửi yêu cầu phát: ${first.title}...`, '⏳');
+        const playRes = await fetch(`${BACKEND_URL}/api/guilds/${currentGuildId}/play`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                trackData: first,
+                voiceChannelId: voiceChannelSelect?.value || null
+            })
+        });
+        const playData = await playRes.json();
+        if (playData.success) {
+            switchTab('tab-home');
+            showToast(`Đang phát: ${first.title}`, '▶️');
+        } else {
+            showToast(`Lỗi: ${playData.error || 'Không thể phát'}`, '❌');
+        }
+    } catch (err) {
+        showToast('Lỗi khi phát bài: ' + err.message, '❌');
+    }
+};
+
+window.playTrendingPlaylist = async (keyword) => {
+    window.playTrendingSong(keyword, keyword);
+};
+
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', async () => {
     setupTabNavigation();
@@ -235,6 +310,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupVolume();
     setupTheaterMode();
     setupKeyboardShortcuts();
+    renderHotTracks();
+
+    if (btnModalCloseIcon) {
+        btnModalCloseIcon.addEventListener('click', () => {
+            voiceModal.classList.remove('active');
+        });
+    }
 
     await checkAuth();
     await loadGuilds();
@@ -522,6 +604,7 @@ function updatePlayerUI(player) {
         currentSeconds = player.currentSeconds || 0;
 
         heroArt.src = track.thumbnail;
+        if (heroBgArt) heroBgArt.style.backgroundImage = `url('${track.thumbnail}')`;
         heroTitle.textContent = track.title;
         heroArtist.textContent = track.artist;
         heroMeta.textContent = `Yêu cầu bởi: ${track.requestedBy ? track.requestedBy.username : 'Dashboard'} • Thời lượng: ${track.durationFormatted}`;
@@ -542,12 +625,13 @@ function updatePlayerUI(player) {
         seekProgress.style.width = `${pct}%`;
         seekThumb.style.left = `${pct}%`;
     } else {
+        if (heroBgArt) heroBgArt.style.backgroundImage = 'none';
         heroTitle.textContent = 'Chưa có bài hát nào đang phát';
-        heroArtist.textContent = 'Hãy tìm kiếm bài hát hoặc gõ /play trên Discord để bắt đầu';
-        heroMeta.textContent = 'Sẵn sàng kết nối';
+        heroArtist.textContent = 'Khám phá danh sách bài hát hot bên dưới hoặc gõ lệnh /play trên Discord để quẩy nhạc!';
+        heroMeta.textContent = 'Sẵn sàng kết nối kênh thoại';
 
         barTitle.textContent = 'Chưa phát nhạc';
-        barArtist.textContent = 'Craftopia Music Player';
+        barArtist.textContent = 'Craftopia Music Studio';
 
         theaterTitle.textContent = 'Chưa phát nhạc';
         theaterArtist.textContent = 'Craftopia Music';
@@ -563,11 +647,21 @@ function updatePlayerUI(player) {
 }
 
 function renderQueues(queue) {
+    if (sidebarQueueCount) sidebarQueueCount.textContent = queue.length;
+    if (queueStatsText) {
+        const totalSecs = queue.reduce((acc, t) => acc + (t.durationSeconds || 0), 0);
+        queueStatsText.textContent = `${queue.length} bài hát trong hàng đợi • Tổng thời lượng: ${formatDuration(totalSecs)}`;
+    }
+
     if (queue.length === 0) {
         homeQueueTbody.innerHTML = `
             <tr>
-                <td colspan="5" style="text-align:center; color:var(--text-muted); padding: 40px;">
-                    Hàng đợi hiện đang trống. Hãy nhập tên bài hát vào thanh tìm kiếm phía trên để thêm bài!
+                <td colspan="5" style="text-align:center; padding: 48px;">
+                    <div class="empty-queue-art">
+                        <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>
+                        <p style="margin-top:10px; font-weight:700; color:var(--text-secondary);">Hàng đợi hiện đang trống</p>
+                        <span style="font-size:12px; color:var(--text-muted);">Hãy chọn bài hát gợi ý phía trên hoặc gõ tên bài vào ô tìm kiếm để phát!</span>
+                    </div>
                 </td>
             </tr>
         `;
