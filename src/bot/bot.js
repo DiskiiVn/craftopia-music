@@ -77,6 +77,63 @@ class DiscordMusicBotPool {
                 }
             });
 
+            // Voice state listener: Detect empty voice channel to free bot or handle disconnect
+            client.on('voiceStateUpdate', (oldState, newState) => {
+                try {
+                    const guildId = oldState.guild?.id || newState.guild?.id;
+                    if (!guildId) return;
+
+                    // If this bot was disconnected or kicked from voice
+                    if (oldState.member?.id === client.user.id && !newState.channelId) {
+                        const player = musicManager.getPlayer(guildId, null, client.user.id);
+                        if (player) {
+                            console.log(`[Multi-Bot] Bot #${client.botIndex} (${client.user.username}) đã rời kênh voice ở server ${guildId}`);
+                            player.destroy();
+                        }
+                        return;
+                    }
+
+                    // Check if the voice channel this bot is currently in has become empty of humans
+                    const myVoiceChannelId = oldState.guild?.members.me?.voice?.channelId;
+                    if (myVoiceChannelId && oldState.channelId === myVoiceChannelId) {
+                        const voiceChannel = oldState.guild.channels.cache.get(myVoiceChannelId);
+                        if (voiceChannel && voiceChannel.isVoiceBased()) {
+                            const humanMembers = voiceChannel.members.filter(m => !m.user.bot);
+                            if (humanMembers.size === 0) {
+                                if (!client._leaveTimeouts) client._leaveTimeouts = new Map();
+                                if (!client._leaveTimeouts.has(myVoiceChannelId)) {
+                                    const timer = setTimeout(() => {
+                                        client._leaveTimeouts.delete(myVoiceChannelId);
+                                        const curChannel = oldState.guild.channels.cache.get(myVoiceChannelId);
+                                        if (curChannel && curChannel.isVoiceBased()) {
+                                            const remainingHumans = curChannel.members.filter(m => !m.user.bot).size;
+                                            if (remainingHumans === 0) {
+                                                const player = musicManager.getPlayer(guildId, null, client.user.id);
+                                                if (player) {
+                                                    console.log(`[Multi-Bot] Phòng #${curChannel.name} không còn người nghe. Bot #${client.botIndex} tự động rời để sẵn sàng phục vụ phòng khác.`);
+                                                    player.destroy();
+                                                }
+                                            }
+                                        }
+                                    }, 45000); // 45s grace period
+                                    client._leaveTimeouts.set(myVoiceChannelId, timer);
+                                }
+                            }
+                        }
+                    }
+
+                    // If someone re-joined the bot's channel, cancel auto-leave
+                    if (myVoiceChannelId && newState.channelId === myVoiceChannelId && !newState.member?.user.bot) {
+                        if (client._leaveTimeouts && client._leaveTimeouts.has(myVoiceChannelId)) {
+                            clearTimeout(client._leaveTimeouts.get(myVoiceChannelId));
+                            client._leaveTimeouts.delete(myVoiceChannelId);
+                        }
+                    }
+                } catch (err) {
+                    // Ignore voice state errors
+                }
+            });
+
             return client;
         });
     }
@@ -267,7 +324,9 @@ class DiscordMusicBotPool {
     /**
      * Dispatch an available bot for a requested voice channel.
      * 1. If a bot is already connected to this channel, use it.
-     * 2. Otherwise find a bot in the pool that is idle (not connected to any channel in this server).
+     * 2. Find a completely idle bot (not in any channel in this server).
+     * 3. If no completely idle bot, find a bot in an EMPTY channel (0 human listeners) and relocate it.
+     * 4. If all bots are genuinely occupied with active human listeners, report accurate status.
      */
     getAvailableBotForVoice(guildId, voiceChannelId) {
         // 1. Is there already a bot inside this voice channel?
@@ -281,9 +340,11 @@ class DiscordMusicBotPool {
             return { bot: existingPlayer.botClient, isExisting: true };
         }
 
-        // 2. Find a free bot that belongs to this guild and is idle
+        // 2. Scan all bots in the pool
         const busyList = [];
         const missingFromGuild = [];
+        const idleBots = [];      // Bots not in any channel in this guild
+        const emptyRoomBots = []; // Bots in a channel with 0 human listeners
 
         for (const client of this.clients) {
             if (!client.isReady()) continue;
@@ -295,23 +356,69 @@ class DiscordMusicBotPool {
 
             const activeVoiceId = g.members.me?.voice?.channelId;
             const player = musicManager.getPlayer(guildId, null, client.user.id);
-            const isBusy = !!activeVoiceId || (player && player.currentTrack && player.voiceChannelId);
 
-            if (!isBusy) {
-                return { bot: client, isExisting: false };
-            } else {
-                const vId = activeVoiceId || player?.voiceChannelId;
-                const ch = g.channels.cache.get(vId);
-                const chName = ch ? ch.name : vId;
-                busyList.push(`• **Bot #${client.botIndex} (${client.user.username})**: đang phát ở phòng \`#${chName}\``);
+            // Case A: Bot is not in any voice channel in this guild
+            if (!activeVoiceId) {
+                idleBots.push(client);
+                continue;
             }
+
+            // Case B: Bot is connected to activeVoiceId. Check if activeVoiceId has human listeners!
+            const currentChannel = g.channels.cache.get(activeVoiceId);
+            const humanCount = (currentChannel && currentChannel.isVoiceBased() && currentChannel.members)
+                ? currentChannel.members.filter(m => !m.user.bot).size
+                : 0;
+
+            if (humanCount === 0) {
+                // Room is completely empty of humans! Bot can be reclaimed immediately!
+                emptyRoomBots.push({
+                    client,
+                    oldChannelName: currentChannel?.name || activeVoiceId,
+                    humanCount: 0
+                });
+                continue;
+            }
+
+            // Case C: Bot is in a channel with humans, but player is NOT playing any track and queue is empty
+            const isPlaying = player && player.currentTrack && !player.isPaused;
+            if (!isPlaying && (!player || player.queue.length === 0)) {
+                emptyRoomBots.push({
+                    client,
+                    oldChannelName: currentChannel?.name || activeVoiceId,
+                    humanCount,
+                    isIdleMusic: true
+                });
+                continue;
+            }
+
+            // Case D: Bot is genuinely busy playing music for active human listeners
+            const chName = currentChannel ? currentChannel.name : activeVoiceId;
+            busyList.push(`• **Bot #${client.botIndex} (${client.user.username})**: đang phục vụ ${humanCount} người ở phòng \`#${chName}\``);
         }
 
+        // Priority 1: Pick a bot completely free (not in voice)
+        if (idleBots.length > 0) {
+            return { bot: idleBots[0], isExisting: false };
+        }
+
+        // Priority 2: Pick a bot in an empty channel (relocate it to the new channel where the user is)
+        if (emptyRoomBots.length > 0) {
+            const candidate = emptyRoomBots[0].client;
+            console.log(`[Multi-Bot] Tự động điều phối Bot #${candidate.botIndex} (${candidate.user.username}) từ phòng trống "${emptyRoomBots[0].oldChannelName}" sang phòng mới.`);
+            return {
+                bot: candidate,
+                isExisting: false,
+                relocatedFrom: emptyRoomBots[0].oldChannelName
+            };
+        }
+
+        // Priority 3: All bots in guild are genuinely occupied by other listeners
         return {
             bot: null,
             busyList,
             missingFromGuild,
-            totalBots: this.clients.length
+            totalBots: this.clients.length,
+            inGuildBots: this.clients.length - missingFromGuild.length
         };
     }
 
@@ -365,11 +472,27 @@ class DiscordMusicBotPool {
                 let chosenBot = botResult.bot;
 
                 if (!chosenBot) {
+                    if (botResult.missingFromGuild && botResult.missingFromGuild.length > 0) {
+                        const missing = botResult.missingFromGuild[0];
+                        const inviteUrl = `https://discord.com/oauth2/authorize?client_id=${missing.user.id}&permissions=8&scope=bot%20applications.commands`;
+                        const row = new ActionRowBuilder().addComponents(
+                            new ButtonBuilder()
+                                .setLabel(`Mời Bot #${missing.botIndex} (${missing.user.username})`)
+                                .setStyle(ButtonStyle.Link)
+                                .setURL(inviteUrl)
+                                .setEmoji('🤖')
+                        );
+                        return interaction.editReply({
+                            content: `⚠️ **Phòng khác hiện đang có người nghe nhạc!**\n\n🤖 Cụm Multi-Bot có sẵn **Bot #${missing.botIndex} (${missing.user.username})** đang rảnh nhưng **CHƯA ĐƯỢC MỜI** vào Server này!\n👉 Bấm vào nút bên dưới để mời Bot #${missing.botIndex} vào Server và quẩy nhạc song song ở cả 2 phòng nhé:`,
+                            components: [row]
+                        });
+                    }
+
                     const busyDesc = botResult.busyList.length > 0
                         ? `\n\n📌 **Trạng thái các bot hiện tại:**\n${botResult.busyList.join('\n')}`
                         : '';
                     return interaction.editReply({
-                        content: `❌ **Tất cả các Bot (${botResult.totalBots} bot) hiện đều đang bận phát nhạc ở các phòng khác!**${busyDesc}\n\n💡 *Gợi ý: Thêm \`DISCORD_TOKEN_2\`, \`DISCORD_TOKEN_3\` vào file .env trên Pterodactyl để mở rộng thêm bot phục vụ song song nhiều phòng nhé!*`
+                        content: `❌ **Tất cả các Bot (${botResult.totalBots} bot) hiện đều đang bận phát nhạc cho người nghe ở các phòng khác!**${busyDesc}\n\n💡 *Gợi ý: Thêm \`DISCORD_TOKEN_2\`, \`DISCORD_TOKEN_3\` vào file .env trên Pterodactyl để mở rộng thêm bot phục vụ song song nhiều phòng nhé!*`
                     });
                 }
 

@@ -348,7 +348,14 @@ class WebServer {
 
             const botResult = bot.getAvailableBotForVoice(guildId, channel.id);
             if (!botResult.bot) {
-                return res.status(400).json({ error: 'Tất cả các Bot đều đang bận ở phòng khác!' });
+                if (botResult.missingFromGuild && botResult.missingFromGuild.length > 0) {
+                    const missing = botResult.missingFromGuild[0];
+                    return res.status(400).json({
+                        error: `Cụm có Bot #${missing.botIndex} (${missing.user?.username || 'Bot'}) đang sẵn sàng nhưng chưa được mời vào Server này! Hãy mời bot vào server trước nhé.`,
+                        inviteUrl: `/invite/${missing.botIndex || 1}`
+                    });
+                }
+                return res.status(400).json({ error: 'Tất cả các Bot đều đang bận phục vụ người nghe ở phòng khác!' });
             }
 
             const player = musicManager.getOrCreatePlayer(guildId, botResult.bot, channel.id);
@@ -406,11 +413,21 @@ class WebServer {
             // 3. Multi-Bot: Điều phối bot khả dụng vào phòng voice
             const botResult = bot.getAvailableBotForVoice(guildId, targetVoice.id);
             if (!botResult.bot) {
+                if (botResult.missingFromGuild && botResult.missingFromGuild.length > 0) {
+                    const missing = botResult.missingFromGuild[0];
+                    const inviteUrl = `/invite/${missing.botIndex || 1}`;
+                    return res.status(400).json({
+                        error: `Phòng khác hiện đang có người nghe nhạc. Cụm Multi-Bot có Bot #${missing.botIndex} (${missing.user?.username || 'Bot'}) đang rảnh nhưng CHƯA ĐƯỢC MỜI vào Server "${guild.name}"! Vui lòng mời Bot #${missing.botIndex} vào Server để phát cùng lúc ở cả 2 phòng nhé.`,
+                        inviteUrl: inviteUrl,
+                        needsInvite: true
+                    });
+                }
+
                 const busyMsg = (botResult.busyList && botResult.busyList.length > 0)
-                    ? `\n\n📌 **Trạng thái các Bot:**\n${botResult.busyList.join('\n')}`
+                    ? `\n\n📌 Trạng thái các Bot:\n${botResult.busyList.join('\n')}`
                     : '';
                 return res.status(400).json({
-                    error: `Tất cả các Bot (${bot.clients.length} bot) hiện đang bận phát nhạc ở các phòng khác!${busyMsg}\n\n💡 Mẹo: Bạn có thể thêm DISCORD_TOKEN_2, DISCORD_TOKEN_3 trong file .env trên Pterodactyl để mở rộng thêm bot vào các phòng khác cùng lúc!`
+                    error: `Tất cả các Bot (${bot.clients.length} bot) hiện đang bận phục vụ người nghe ở các phòng khác!${busyMsg}\n\n💡 Mẹo: Bạn có thể thêm DISCORD_TOKEN_2, DISCORD_TOKEN_3 trong file .env trên Pterodactyl để mở rộng thêm bot vào các phòng khác cùng lúc!`
                 });
             }
 

@@ -542,6 +542,7 @@ class MusicManager extends EventEmitter {
             }
         }
 
+        const isSwitchingChannel = Boolean(player.voiceChannelId && player.voiceChannelId !== voiceChannel.id);
         await player.join(voiceChannel, textChannelId, botClient);
 
         let tracks = [];
@@ -564,13 +565,17 @@ class MusicManager extends EventEmitter {
             }
         };
 
-        if (!player.currentTrack) {
+        if (!player.currentTrack || isSwitchingChannel || playNow) {
+            if (isSwitchingChannel) {
+                player.queue = []; // Dọn dẹp hàng đợi cũ từ phòng trống trước đó
+            }
+            if (player.currentTrack && !isSwitchingChannel) {
+                player.queue.unshift(track);
+                player.skip();
+                return { type: 'playing_now', track, player };
+            }
             await player.playTrack(track);
             return { type: 'playing', track, player };
-        } else if (playNow) {
-            player.queue.unshift(track);
-            player.skip();
-            return { type: 'playing_now', track, player };
         } else {
             player.queue.push(track);
             this.emitUpdate(guildId, player);
