@@ -377,6 +377,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupLibraryTabs();
     setupMobilePlayerSheet();
     setupCanvasVisualizers();
+    setupBotsCluster();
     renderHotTracks();
 
     if (btnModalCloseIcon) {
@@ -2326,3 +2327,252 @@ function setupCanvasVisualizers() {
 
     requestAnimationFrame(renderFrame);
 }
+
+// ====================================================
+// MULTI-BOT CLUSTER & BOT INVITE MANAGEMENT (TAB BOTS)
+// ====================================================
+let cachedBotsData = null;
+
+function setupBotsCluster() {
+    const btnRefreshBots = document.getElementById('btn-refresh-bots');
+    if (btnRefreshBots) {
+        btnRefreshBots.addEventListener('click', () => {
+            fetchBotsClusterData(true);
+        });
+    }
+
+    // Initial fetch
+    fetchBotsClusterData(false);
+
+    // Auto-refresh every 30 seconds
+    setInterval(() => {
+        fetchBotsClusterData(false);
+    }, 30000);
+}
+
+async function fetchBotsClusterData(showFeedback = false) {
+    if (showFeedback) {
+        showToast('Đang cập nhật trạng thái cụm Multi-Bot... 🔄', '⏳');
+    }
+
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/bots`);
+        if (!res.ok) throw new Error('Không thể tải thông tin cụm bot');
+        const data = await res.json();
+        cachedBotsData = data;
+        renderBotsClusterUI(data);
+        if (showFeedback) {
+            showToast(`Cập nhật thành công! ${data.onlineBots}/${data.totalBots} bot đang online 🤖`, '✅');
+        }
+    } catch (err) {
+        console.warn('[Fetch bots cluster error]:', err.message);
+        if (!cachedBotsData) {
+            renderBotsFallback();
+        }
+    }
+}
+
+function renderBotsClusterUI(data) {
+    const total = data.totalBots || 1;
+    const online = data.onlineBots || 0;
+    const bots = data.bots || [];
+
+    // 1. Update Sidebar and header badges
+    const sidebarBotsBadge = document.getElementById('sidebar-bots-badge');
+    const sysBotsOnlinePill = document.getElementById('sys-bots-online-pill');
+    const sysBotsSummaryText = document.getElementById('sys-bots-summary-text');
+
+    if (sidebarBotsBadge) {
+        sidebarBotsBadge.textContent = `${online}/${total} Online`;
+        if (online > 0) {
+            sidebarBotsBadge.style.color = 'var(--primary-light)';
+        }
+    }
+
+    if (sysBotsOnlinePill) {
+        sysBotsOnlinePill.textContent = `● ${online}/${total} Online`;
+        sysBotsOnlinePill.className = `sys-badge ${online > 0 ? 'online' : ''}`;
+    }
+
+    if (sysBotsSummaryText) {
+        sysBotsSummaryText.textContent = `${total} Bot trong cụm • Mời bot`;
+    }
+
+    // 2. Update Banner Stats
+    const statTotalBots = document.getElementById('stat-total-bots');
+    const statOnlineBots = document.getElementById('stat-online-bots');
+    const statTotalGuilds = document.getElementById('stat-total-guilds');
+    const statActiveRooms = document.getElementById('stat-active-rooms');
+
+    let totalGuildsCount = 0;
+    let totalActiveRoomsCount = 0;
+
+    bots.forEach(b => {
+        totalGuildsCount += (b.guildCount || 0);
+        totalActiveRoomsCount += (b.activePlayingGuilds || 0);
+    });
+
+    if (statTotalBots) statTotalBots.textContent = total;
+    if (statOnlineBots) statOnlineBots.textContent = online;
+    if (statTotalGuilds) statTotalGuilds.textContent = totalGuildsCount;
+    if (statActiveRooms) statActiveRooms.textContent = totalActiveRoomsCount;
+
+    // 3. Render Bot Cards Grid
+    const botsGrid = document.getElementById('bots-grid');
+    if (!botsGrid) return;
+
+    if (bots.length === 0) {
+        botsGrid.innerHTML = `
+            <div class="bots-loading-box">
+                <p>Chưa có dữ liệu bot nào từ server.</p>
+            </div>
+        `;
+        return;
+    }
+
+    botsGrid.innerHTML = bots.map((b, idx) => {
+        const isOnline = b.isOnline;
+        const isPrimary = (b.index === 1);
+        const badgeClass = isPrimary ? 'primary' : 'secondary';
+        const badgeLabel = isPrimary ? '👑 Bot Chính (Master)' : `⚡ Bot Phụ #${b.index} (Extension)`;
+        const pingDisplay = b.ping !== null ? `${b.ping} ms` : 'Offline';
+        const statusRingClass = isOnline ? 'online' : 'offline';
+        const statusTitle = isOnline
+            ? (b.isBusy ? '🟢 Đang phát nhạc' : '🟢 Sẵn sàng phục vụ')
+            : '🔴 Offline';
+
+        let playingInfoHtml = '';
+        if (isOnline && b.isBusy && b.activeChannels && b.activeChannels.length > 0) {
+            const ch = b.activeChannels[0];
+            playingInfoHtml = `
+                <div class="bot-playing-status-box">
+                    <span class="bot-playing-icon">🎵</span>
+                    <div class="bot-playing-text">
+                        <div class="bot-playing-title">ĐANG PHÁT TẠI: #${escapeHtml(ch.channelName || 'Voice')}</div>
+                        <div class="bot-playing-sub" title="${escapeHtml(ch.trackTitle || '')}">${escapeHtml(ch.trackTitle || 'Bài hát')}</div>
+                    </div>
+                </div>
+            `;
+        } else if (isOnline) {
+            playingInfoHtml = `
+                <div class="bot-playing-status-box idle">
+                    <span class="bot-playing-icon">✨</span>
+                    <div class="bot-playing-text">
+                        <div class="bot-playing-title">SẴN SÀNG PHỤC VỤ</div>
+                        <div class="bot-playing-sub">Đang chờ lệnh hoặc quét voice từ web</div>
+                    </div>
+                </div>
+            `;
+        } else {
+            playingInfoHtml = `
+                <div class="bot-playing-status-box idle" style="opacity:0.6;">
+                    <span class="bot-playing-icon">💤</span>
+                    <div class="bot-playing-text">
+                        <div class="bot-playing-title">CHƯA KHỞI ĐỘNG</div>
+                        <div class="bot-playing-sub">Kiểm tra token bot trên Pterodactyl</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        const inviteLink = b.inviteUrl || `/invite/${b.index}`;
+        const inviteAdminLink = b.inviteAdminUrl || `/invite/${b.index}`;
+
+        return `
+            <div class="bot-card">
+                <div class="bot-card-top">
+                    <div class="bot-avatar-wrap">
+                        <img class="bot-avatar-img" src="${b.avatar}" alt="${escapeHtml(b.username)}">
+                        <div class="bot-status-ring ${statusRingClass}" title="${statusTitle}"></div>
+                    </div>
+                    <div class="bot-card-title-col">
+                        <div class="bot-card-name-row">
+                            <span class="bot-card-name" title="${escapeHtml(b.username)}">${escapeHtml(b.username)}</span>
+                            <span class="bot-badge-pill ${badgeClass}">${badgeLabel}</span>
+                        </div>
+                        <div class="bot-card-tag">${escapeHtml(b.tag || b.username)}</div>
+                    </div>
+                </div>
+
+                <div class="bot-card-info-grid">
+                    <div class="bot-info-chip">
+                        <span class="bot-chip-label">TRẠNG THÁI</span>
+                        <span class="bot-chip-val" style="color:${isOnline ? 'var(--primary-light)' : 'var(--text-muted)'};">${statusTitle}</span>
+                    </div>
+                    <div class="bot-info-chip">
+                        <span class="bot-chip-label">ĐỘ TRỄ PING</span>
+                        <span class="bot-chip-val" style="font-family:'JetBrains Mono', monospace;">${pingDisplay}</span>
+                    </div>
+                    <div class="bot-info-chip">
+                        <span class="bot-chip-label">SERVER THAM GIA</span>
+                        <span class="bot-chip-val">${b.guildCount || 0} Servers</span>
+                    </div>
+                    <div class="bot-info-chip">
+                        <span class="bot-chip-label">PHÒNG ĐANG PHÁT</span>
+                        <span class="bot-chip-val">${b.activePlayingGuilds || 0} Phòng</span>
+                    </div>
+                </div>
+
+                ${playingInfoHtml}
+
+                <div class="bot-card-actions">
+                    <a href="${inviteLink}" target="_blank" class="btn-invite-primary" title="Mời bot vào Server Discord của bạn">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                        <span>Mời Bot vào Server</span>
+                    </a>
+                    <div class="bot-subactions-row">
+                        <a href="${inviteAdminLink}" target="_blank" class="btn-invite-admin" title="Mời với quyền Quản trị viên (Khuyên dùng để bot không bị mute)">
+                            <span>👑 Mời toàn quyền Admin</span>
+                        </a>
+                        <button class="btn-copy-invite" onclick="copyBotInvite('${inviteLink}')" title="Sao chép link mời bot">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderBotsFallback() {
+    const botsGrid = document.getElementById('bots-grid');
+    if (!botsGrid) return;
+    botsGrid.innerHTML = `
+        <div class="bot-card">
+            <div class="bot-card-top">
+                <div class="bot-avatar-wrap">
+                    <img class="bot-avatar-img" src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Craftopia Music">
+                    <div class="bot-status-ring online"></div>
+                </div>
+                <div class="bot-card-title-col">
+                    <div class="bot-card-name-row">
+                        <span class="bot-card-name">Craftopia Music #1</span>
+                        <span class="bot-badge-pill primary">👑 Bot Chính (Master)</span>
+                    </div>
+                    <div class="bot-card-tag">Online 24/7</div>
+                </div>
+            </div>
+            <div class="bot-playing-status-box idle">
+                <span class="bot-playing-icon">✨</span>
+                <div class="bot-playing-text">
+                    <div class="bot-playing-title">SẴN SÀNG PHỤC VỤ</div>
+                    <div class="bot-playing-sub">Mời bot vào Server để nghe nhạc cùng bạn bè</div>
+                </div>
+            </div>
+            <div class="bot-card-actions">
+                <a href="/invite" target="_blank" class="btn-invite-primary">
+                    <span>➕ Mời Bot vào Server</span>
+                </a>
+            </div>
+        </div>
+    `;
+}
+
+window.copyBotInvite = (url) => {
+    const fullUrl = url.startsWith('http') ? url : (window.location.origin + url);
+    navigator.clipboard.writeText(fullUrl).then(() => {
+        showToast('Đã sao chép link mời Bot vào bộ nhớ tạm! 📋', '📋');
+    }).catch(() => {
+        showToast('Link mời bot: ' + fullUrl, '📋');
+    });
+};

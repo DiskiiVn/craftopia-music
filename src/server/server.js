@@ -71,8 +71,86 @@ class WebServer {
             res.json({
                 domain: config.domain,
                 clientId: config.clientId,
-                botReady: bot.client.isReady()
+                botReady: bot.client.isReady(),
+                totalBots: bot.clients.length
             });
+        });
+
+        // --- Multi-Bot Pool Status & Invite Endpoints ---
+        this.app.get('/api/bots', (req, res) => {
+            const botsList = (bot.clients || []).map((client, idx) => {
+                const isOnline = Boolean(client && client.isReady && client.isReady());
+                const user = client?.user;
+                const clientId = user?.id || (idx === 0 ? config.clientId : '');
+                
+                // Discord Bot Invite URLs
+                const permissions = '36700160'; // Standard Voice + Text permissions
+                const inviteUrl = clientId
+                    ? `https://discord.com/api/oauth2/authorize?client_id=${clientId}&permissions=${permissions}&scope=bot%20applications.commands`
+                    : '';
+                const inviteAdminUrl = clientId
+                    ? `https://discord.com/api/oauth2/authorize?client_id=${clientId}&permissions=8&scope=bot%20applications.commands`
+                    : '';
+
+                // Active playing info
+                let activePlayingGuilds = 0;
+                let activeChannels = [];
+                if (musicManager && musicManager.players) {
+                    for (const player of musicManager.players.values()) {
+                        if (player.botUser && player.botUser.id === user?.id && player.currentTrack && !player.isPaused) {
+                            activePlayingGuilds++;
+                            activeChannels.push({
+                                guildId: player.guildId,
+                                channelName: player.voiceChannelName,
+                                trackTitle: player.currentTrack.title
+                            });
+                        }
+                    }
+                }
+
+                return {
+                    index: client.botIndex || (idx + 1),
+                    id: clientId,
+                    username: user ? user.username : `Craftopia Music #${idx + 1}`,
+                    tag: user ? user.tag : `Craftopia Music #${idx + 1}`,
+                    avatar: user ? (user.displayAvatarURL ? user.displayAvatarURL() : `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`) : 'https://cdn.discordapp.com/embed/avatars/0.png',
+                    status: isOnline ? 'online' : 'offline',
+                    isOnline,
+                    isBusy: activePlayingGuilds > 0,
+                    ping: (isOnline && client.ws) ? client.ws.ping : null,
+                    guildCount: (isOnline && client.guilds) ? client.guilds.cache.size : 0,
+                    activePlayingGuilds,
+                    activeChannels,
+                    inviteUrl,
+                    inviteAdminUrl
+                };
+            });
+
+            const onlineCount = botsList.filter(b => b.isOnline).length;
+            res.json({
+                totalBots: bot.clients ? bot.clients.length : 1,
+                onlineBots: onlineCount,
+                bots: botsList
+            });
+        });
+
+        // Direct Redirect to Bot Invite
+        this.app.get('/invite', (req, res) => {
+            const primaryId = bot.client?.user?.id || config.clientId;
+            if (primaryId) {
+                return res.redirect(`https://discord.com/api/oauth2/authorize?client_id=${primaryId}&permissions=36700160&scope=bot%20applications.commands`);
+            }
+            res.redirect('/');
+        });
+
+        this.app.get('/invite/:index', (req, res) => {
+            const idx = parseInt(req.params.index, 10) - 1;
+            const targetClient = (bot.clients && bot.clients[idx]) ? bot.clients[idx] : bot.client;
+            const targetId = targetClient?.user?.id || config.clientId;
+            if (targetId) {
+                return res.redirect(`https://discord.com/api/oauth2/authorize?client_id=${targetId}&permissions=36700160&scope=bot%20applications.commands`);
+            }
+            res.redirect('/');
         });
 
         // --- Discord OAuth2 Endpoints ---
