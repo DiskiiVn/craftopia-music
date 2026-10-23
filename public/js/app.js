@@ -153,9 +153,34 @@ async function triggerSearch(query) {
 }
 
 function setupSearch() {
+    const urlDetectPill = document.getElementById('url-detect-pill');
+    const btnPlayDetectedUrl = document.getElementById('btn-play-detected-url');
+
+    function checkUrlInput(val) {
+        if (!urlDetectPill) return;
+        const isUrl = val.includes('youtube.com/') || val.includes('youtu.be/') || val.startsWith('http://') || val.startsWith('https://');
+        if (isUrl) {
+            urlDetectPill.style.display = 'inline-flex';
+        } else {
+            urlDetectPill.style.display = 'none';
+        }
+    }
+
+    if (btnPlayDetectedUrl) {
+        btnPlayDetectedUrl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const val = topSearchInput.value.trim();
+            if (val) {
+                playTrackDirect({ url: val, title: 'YouTube Direct Link' }, true);
+                if (urlDetectPill) urlDetectPill.style.display = 'none';
+            }
+        });
+    }
+
     topSearchInput.addEventListener('input', (e) => {
         const query = e.target.value.trim();
         clearTimeout(searchTimeout);
+        checkUrlInput(query);
 
         if (!query) {
             searchStatus.textContent = 'Nhập từ khoá vào thanh tìm kiếm phía trên...';
@@ -171,7 +196,9 @@ function setupSearch() {
     topSearchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             clearTimeout(searchTimeout);
-            triggerSearch(topSearchInput.value.trim());
+            const val = topSearchInput.value.trim();
+            checkUrlInput(val);
+            triggerSearch(val);
         }
     });
 }
@@ -185,23 +212,49 @@ function renderSearchResults(results) {
         return;
     }
 
-    searchStatus.innerHTML = `Tìm thấy <b>${results.length}</b> bài hát phù hợp (Click bài bất kỳ để phát):`;
+    searchStatus.innerHTML = `Tìm thấy <b>${results.length}</b> bài hát phù hợp (Phát ngay hoặc Thêm vào hàng đợi):`;
     searchResultsGrid.innerHTML = results.map((song, idx) => `
-        <div class="song-card" onclick="playSongByIndex(${idx})">
-            <div class="song-card-thumb-wrap">
-                <img class="song-card-thumb" src="${song.thumbnail}" alt="${song.title}">
+        <div class="song-card">
+            <div class="song-card-thumb-wrap" onclick="playSongByIndex(${idx}, true)">
+                <img class="song-card-thumb" src="${song.thumbnail}" alt="${escapeHtml(song.title)}">
                 <button class="card-play-btn" title="Phát ngay">
                     <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                 </button>
             </div>
-            <div class="song-card-title" title="${song.title}">${song.title}</div>
-            <div class="song-card-artist">${song.artist} • ${song.durationFormatted}</div>
+            <div class="song-card-title" title="${escapeHtml(song.title)}" onclick="playSongByIndex(${idx}, true)">${escapeHtml(song.title)}</div>
+            <div class="song-card-artist">${escapeHtml(song.artist)} • ${song.durationFormatted}</div>
+            <div class="song-card-actions">
+                <button class="btn-card-act play-now" onclick="event.stopPropagation(); playSongByIndex(${idx}, true)" title="Phát ngay">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                    <span>Phát ngay</span>
+                </button>
+                <button class="btn-card-act queue-add" onclick="event.stopPropagation(); playSongByIndex(${idx}, false)" title="Thêm vào hàng đợi">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                    <span>+ Hàng đợi</span>
+                </button>
+                <button class="btn-card-fav ${isFavorite(song.url) ? 'active' : ''}" onclick="event.stopPropagation(); toggleCardFavByIndex(${idx})" title="Lưu vào Thư viện Yêu thích">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                </button>
+            </div>
         </div>
     `).join('');
 }
 
-window.playSongByIndex = async (index) => {
+window.toggleCardFavByIndex = (idx) => {
+    const song = window.currentSearchResults[idx];
+    if (song) {
+        toggleFavoriteTrack(song);
+        renderSearchResults(window.currentSearchResults);
+    }
+};
+
+window.playSongByIndex = async (index, playNow = false) => {
     const song = window.currentSearchResults[index];
+    if (!song) return;
+    await playTrackDirect(song, playNow);
+};
+
+window.playTrackDirect = async (song, playNow = false) => {
     if (!song) return;
 
     if (!currentGuildId) {
@@ -210,19 +263,25 @@ window.playSongByIndex = async (index) => {
     }
 
     try {
-        showToast(`🔍 Đang quét phòng voice của bạn và phát: ${song.title}...`, '⏳');
+        const actionDesc = playNow ? 'phát ngay' : 'thêm vào hàng đợi';
+        showToast(`🔍 Đang quét phòng voice của bạn và ${actionDesc}: ${song.title}...`, '⏳');
         const res = await fetch(`${BACKEND_URL}/api/guilds/${currentGuildId}/play`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                trackData: song
+                trackData: song,
+                playNow: Boolean(playNow)
             })
         });
         const data = await res.json();
         if (data.success) {
-            switchTab('tab-home');
             const vName = data.voiceChannel ? data.voiceChannel.name : 'voice';
-            showToast(`✅ Đã vào [${vName}] & đang phát: ${song.title}`, '▶️');
+            if (playNow) {
+                switchTab('tab-home');
+                showToast(`✅ Đang phát trong [${vName}]: ${song.title}`, '▶️');
+            } else {
+                showToast(`✅ Đã thêm vào hàng đợi [${vName}]: ${song.title}`, '➕');
+            }
         } else {
             showToast(data.error || 'Không thể phát bài', '⚠️');
         }
@@ -314,6 +373,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupSleepTimer();
     setupEqualizer();
     setupShortcutsModal();
+    setupFavoritesAndHistory();
+    setupLibraryTabs();
+    setupMobilePlayerSheet();
+    setupCanvasVisualizers();
     renderHotTracks();
 
     if (btnModalCloseIcon) {
@@ -353,7 +416,9 @@ function setupTabNavigation() {
         playerLeftTouch.addEventListener('click', (e) => {
             if (e.target.closest('#bar-heart-btn')) return;
             if (window.innerWidth <= 768) {
-                btnToggleTheater.click();
+                const sheet = document.getElementById('mobile-player-sheet');
+                if (sheet) sheet.classList.add('active');
+                else btnToggleTheater.click();
             }
         });
     }
@@ -580,6 +645,15 @@ socket.on('tick', (data) => {
         const mobileMiniFill = document.getElementById('mobile-mini-fill');
         if (mobileMiniFill) mobileMiniFill.style.width = `${pct}%`;
 
+        const sheetSeekProg = document.getElementById('mobile-sheet-seek-prog');
+        const sheetSeekThumb = document.getElementById('mobile-sheet-seek-thumb');
+        const sheetTimeCur = document.getElementById('mobile-sheet-time-cur');
+        const sheetTimeTot = document.getElementById('mobile-sheet-time-tot');
+        if (sheetSeekProg) sheetSeekProg.style.width = `${pct}%`;
+        if (sheetSeekThumb) sheetSeekThumb.style.left = `${pct}%`;
+        if (sheetTimeCur) sheetTimeCur.textContent = data.currentFormatted || formatDuration(currentSeconds);
+        if (sheetTimeTot) sheetTimeTot.textContent = formatDuration(currentDuration);
+
         // Sync lyrics karaoke scroll
         syncLyricsScroll(currentSeconds);
     }
@@ -599,6 +673,15 @@ setInterval(() => {
     seekThumb.style.left = `${pct}%`;
     const mobileMiniFill = document.getElementById('mobile-mini-fill');
     if (mobileMiniFill) mobileMiniFill.style.width = `${pct}%`;
+
+    const sheetSeekProg = document.getElementById('mobile-sheet-seek-prog');
+    const sheetSeekThumb = document.getElementById('mobile-sheet-seek-thumb');
+    const sheetTimeCur = document.getElementById('mobile-sheet-time-cur');
+    const sheetTimeTot = document.getElementById('mobile-sheet-time-tot');
+    if (sheetSeekProg) sheetSeekProg.style.width = `${pct}%`;
+    if (sheetSeekThumb) sheetSeekThumb.style.left = `${pct}%`;
+    if (sheetTimeCur) sheetTimeCur.textContent = formatDuration(Math.floor(interpolated));
+    if (sheetTimeTot) sheetTimeTot.textContent = formatDuration(currentDuration);
 }, 60);
 
 // --- Update UI with Player State ---
@@ -648,6 +731,8 @@ function updatePlayerUI(player) {
     ctrlPlayIcon.innerHTML = playIconSvg;
     heroPlayIcon.innerHTML = playIconSvg;
     theaterPlayIcon.innerHTML = playIconSvg;
+    const mobileSheetPlayIcon = document.getElementById('mobile-sheet-play-icon');
+    if (mobileSheetPlayIcon) mobileSheetPlayIcon.innerHTML = playIconSvg;
 
     // Mini waveform in player bar
     const miniWaveform = document.getElementById('player-mini-waveform');
@@ -713,6 +798,20 @@ function updatePlayerUI(player) {
         seekProgress.style.width = `${pct}%`;
         seekThumb.style.left = `${pct}%`;
 
+        // Mobile Sheet Update
+        const mobileSheetArt = document.getElementById('mobile-sheet-art');
+        const mobileSheetTitle = document.getElementById('mobile-sheet-title');
+        const mobileSheetArtist = document.getElementById('mobile-sheet-artist');
+        const mobileSheetVoiceName = document.getElementById('mobile-sheet-voice-name');
+        if (mobileSheetArt) mobileSheetArt.src = track.thumbnail;
+        if (mobileSheetTitle) mobileSheetTitle.textContent = track.title;
+        if (mobileSheetArtist) mobileSheetArtist.textContent = track.artist;
+        if (mobileSheetVoiceName) mobileSheetVoiceName.textContent = player.voiceChannelName ? `🔊 ${player.voiceChannelName}` : '🔊 Chưa kết nối';
+
+        // Auto record history & sync favorite heart
+        addToHistory(track);
+        updateHeartButtons(isFavorite(track.url));
+
         // Update Lyrics View
         updateLyricsView(track, player);
     } else {
@@ -726,6 +825,13 @@ function updatePlayerUI(player) {
 
         theaterTitle.textContent = 'Chưa phát nhạc';
         theaterArtist.textContent = 'Craftopia Music';
+
+        const mobileSheetTitle = document.getElementById('mobile-sheet-title');
+        const mobileSheetArtist = document.getElementById('mobile-sheet-artist');
+        if (mobileSheetTitle) mobileSheetTitle.textContent = 'Chưa phát nhạc';
+        if (mobileSheetArtist) mobileSheetArtist.textContent = 'Craftopia Music Studio';
+
+        updateHeartButtons(false);
 
         seekCurrent.textContent = '0:00';
         seekTotal.textContent = '0:00';
@@ -769,17 +875,25 @@ function renderQueues(queue) {
                     <div class="track-row-title">
                         <img src="${t.thumbnail}" alt="Thumb">
                         <div>
-                            <div class="track-meta-title">${t.title}</div>
-                            <div class="track-meta-artist">${t.artist}</div>
+                            <div class="track-meta-title" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</div>
+                            <div class="track-meta-artist">${escapeHtml(t.artist)}</div>
                         </div>
                     </div>
                 </td>
                 <td style="color:var(--text-muted); font-family:'JetBrains Mono', monospace;">${t.durationFormatted}</td>
                 <td style="color:var(--text-muted);">${t.requestedBy ? t.requestedBy.username : 'Web'}</td>
                 <td style="text-align: right;">
-                    <button class="btn-icon-action delete" onclick="removeQueueTrack(${idx})" title="Xoá bài">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-                    </button>
+                    <div class="table-actions-row">
+                        <button class="btn-table-action play" onclick="jumpQueueTrack(${idx})" title="Phát ngay bài này">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                        </button>
+                        <button class="btn-table-action fav ${isFavorite(t.url) ? 'active' : ''}" onclick="toggleFavQueueTrack(${idx})" title="Yêu thích">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                        </button>
+                        <button class="btn-table-action danger" onclick="removeQueueTrack(${idx})" title="Xoá bài">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                        </button>
+                    </div>
                 </td>
             </tr>
         `).join('');
@@ -801,22 +915,42 @@ function renderQueues(queue) {
                     <div class="track-row-title">
                         <img src="${t.thumbnail}" alt="Thumb">
                         <div>
-                            <div class="track-meta-title">${t.title}</div>
-                            <div class="track-meta-artist">${t.artist}</div>
+                            <div class="track-meta-title" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</div>
+                            <div class="track-meta-artist">${escapeHtml(t.artist)}</div>
                         </div>
                     </div>
                 </td>
                 <td style="color:var(--text-muted); font-family:'JetBrains Mono', monospace;">${t.durationFormatted}</td>
                 <td style="color:var(--text-muted);">${t.requestedBy ? t.requestedBy.username : 'Web'}</td>
                 <td style="text-align: right;">
-                    <button class="btn-icon-action delete" onclick="removeQueueTrack(${idx})" title="Xoá khỏi hàng đợi">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-                    </button>
+                    <div class="table-actions-row">
+                        <button class="btn-table-action play" onclick="jumpQueueTrack(${idx})" title="Phát ngay bài này">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                        </button>
+                        <button class="btn-table-action fav ${isFavorite(t.url) ? 'active' : ''}" onclick="toggleFavQueueTrack(${idx})" title="Yêu thích">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                        </button>
+                        <button class="btn-table-action danger" onclick="removeQueueTrack(${idx})" title="Xoá khỏi hàng đợi">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                        </button>
+                    </div>
                 </td>
             </tr>
         `).join('');
     }
 }
+
+window.jumpQueueTrack = (index) => {
+    sendControl('jump', index);
+    showToast('Đang chuyển đến bài này ngay! ▶️', '▶️');
+};
+
+window.toggleFavQueueTrack = (index) => {
+    if (currentPlayerData && currentPlayerData.queue && currentPlayerData.queue[index]) {
+        toggleFavoriteTrack(currentPlayerData.queue[index]);
+        renderQueues(currentPlayerData.queue);
+    }
+};
 
 // --- Player Controls Dispatcher ---
 async function sendControl(action, value = null) {
@@ -866,8 +1000,11 @@ function setupControls() {
     });
 
     barHeartBtn.addEventListener('click', () => {
-        barHeartBtn.classList.toggle('active');
-        showToast('Đã thêm vào mục yêu thích! ❤️', '❤️');
+        if (currentPlayerData && currentPlayerData.currentTrack) {
+            toggleFavoriteTrack(currentPlayerData.currentTrack);
+        } else {
+            showToast('Chưa có bài hát nào đang phát để yêu thích!', '⚠️');
+        }
     });
 
     queueClearBtn.addEventListener('click', () => {
@@ -1539,6 +1676,22 @@ function syncLyricsScroll(sec) {
             el.classList.remove('past');
         }
     });
+
+    const mobileCurLyric = document.getElementById('mobile-cur-lyric');
+    const mobileNextLyric = document.getElementById('mobile-next-lyric');
+    if (mobileCurLyric) {
+        if (activeIdx >= 0 && currentLyricsLines[activeIdx]) {
+            mobileCurLyric.textContent = currentLyricsLines[activeIdx].text;
+            if (mobileNextLyric) {
+                mobileNextLyric.textContent = currentLyricsLines[activeIdx + 1]?.text || '...';
+            }
+        } else if (currentLyricsLines.length > 0) {
+            mobileCurLyric.textContent = currentLyricsLines[0].text;
+            if (mobileNextLyric) {
+                mobileNextLyric.textContent = currentLyricsLines[1]?.text || '...';
+            }
+        }
+    }
 }
 
 // --- Sleep Timer Logic ---
@@ -1680,4 +1833,496 @@ function setupShortcutsModal() {
     if (btnShortcutsClose) {
         btnShortcutsClose.addEventListener('click', () => shortcutsModal.classList.remove('active'));
     }
+}
+
+// ====================================================
+// THƯ VIỆN & YÊU THÍCH (LIBRARY & FAVORITES)
+// ====================================================
+function getFavorites() {
+    try {
+        return JSON.parse(localStorage.getItem('craftopia_favorites') || '[]');
+    } catch {
+        return [];
+    }
+}
+
+function saveFavorites(list) {
+    localStorage.setItem('craftopia_favorites', JSON.stringify(list));
+    updateFavoritesBadge();
+    renderFavorites();
+}
+
+function isFavorite(url) {
+    if (!url) return false;
+    const favs = getFavorites();
+    return favs.some(f => f.url === url);
+}
+
+function toggleFavoriteTrack(track) {
+    if (!track || !track.title) {
+        showToast('Chưa có bài hát để thêm vào yêu thích!', '⚠️');
+        return;
+    }
+    let favs = getFavorites();
+    const existingIdx = favs.findIndex(f => f.url === track.url);
+    if (existingIdx >= 0) {
+        favs.splice(existingIdx, 1);
+        saveFavorites(favs);
+        updateHeartButtons(false);
+        showToast(`Đã xoá "${track.title}" khỏi Thư viện Yêu thích 💔`, '💔');
+    } else {
+        const item = {
+            id: track.id || Date.now().toString(),
+            title: track.title,
+            artist: track.artist || 'Unknown Artist',
+            durationFormatted: track.durationFormatted || '0:00',
+            durationSeconds: track.durationSeconds || 0,
+            thumbnail: track.thumbnail || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&h=100&fit=crop',
+            url: track.url,
+            addedAt: new Date().toLocaleDateString('vi-VN')
+        };
+        favs.unshift(item);
+        saveFavorites(favs);
+        updateHeartButtons(true);
+        showToast(`Đã thêm "${track.title}" vào Thư viện Yêu thích! ❤️`, '❤️');
+    }
+}
+
+function updateHeartButtons(isActive) {
+    if (barHeartBtn) {
+        if (isActive) barHeartBtn.classList.add('active');
+        else barHeartBtn.classList.remove('active');
+    }
+    const mobileSheetHeartBtn = document.getElementById('mobile-sheet-heart-btn');
+    if (mobileSheetHeartBtn) {
+        if (isActive) mobileSheetHeartBtn.classList.add('active');
+        else mobileSheetHeartBtn.classList.remove('active');
+    }
+}
+
+function updateFavoritesBadge() {
+    const count = getFavorites().length;
+    const sidebarFav = document.getElementById('sidebar-fav-count');
+    const libFavCount = document.getElementById('lib-fav-tab-count');
+    if (sidebarFav) sidebarFav.textContent = count;
+    if (libFavCount) libFavCount.textContent = count;
+}
+
+function renderFavorites() {
+    const favs = getFavorites();
+    const tbody = document.getElementById('favorites-tbody');
+    if (!tbody) return;
+
+    if (favs.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" style="text-align:center; padding: 48px;">
+                    <div class="empty-queue-art">
+                        <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                        <p style="margin-top:12px; font-weight:700; color:var(--text-secondary);">Thư viện yêu thích chưa có bài hát nào</p>
+                        <span style="font-size:12.5px; color:var(--text-muted);">Hãy nhấn vào biểu tượng ❤️ ở thanh nghe nhạc hoặc thẻ bài hát để lưu vào đây nhé!</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = favs.map((t, idx) => `
+        <tr>
+            <td style="color:var(--text-muted); font-weight:700;">${idx + 1}</td>
+            <td>
+                <div class="track-row-title">
+                    <img src="${t.thumbnail}" alt="Thumb">
+                    <div>
+                        <div class="track-meta-title" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</div>
+                        <div class="track-meta-artist">${escapeHtml(t.artist)}</div>
+                    </div>
+                </div>
+            </td>
+            <td style="color:var(--text-muted); font-family:'JetBrains Mono', monospace;">${t.durationFormatted}</td>
+            <td style="color:var(--text-muted); font-size:12px;">${t.addedAt || 'Gần đây'}</td>
+            <td style="text-align: right;">
+                <div class="table-actions-row">
+                    <button class="btn-table-action play" onclick="playFavTrack(${idx}, true)" title="Phát ngay">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                    </button>
+                    <button class="btn-table-action" onclick="playFavTrack(${idx}, false)" title="Thêm vào hàng đợi">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                    </button>
+                    <button class="btn-table-action danger" onclick="removeFavoriteByIndex(${idx})" title="Xoá khỏi yêu thích">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+window.removeFavoriteByIndex = (idx) => {
+    let favs = getFavorites();
+    if (idx >= 0 && idx < favs.length) {
+        const removed = favs.splice(idx, 1)[0];
+        saveFavorites(favs);
+        if (currentPlayerData?.currentTrack?.url === removed.url) {
+            updateHeartButtons(false);
+        }
+        showToast(`Đã xoá "${removed.title}" khỏi Yêu thích!`, '💔');
+    }
+};
+
+window.playFavTrack = async (idx, playNow = false) => {
+    const favs = getFavorites();
+    const song = favs[idx];
+    if (song) await playTrackDirect(song, playNow);
+};
+
+window.playAllFavorites = async () => {
+    const favs = getFavorites();
+    if (favs.length === 0) {
+        showToast('Bạn chưa có bài hát yêu thích nào để phát!', '⚠️');
+        return;
+    }
+    showToast(`Đang thêm ${favs.length} bài hát yêu thích vào phát...`, '❤️');
+    await playTrackDirect(favs[0], true);
+    for (let i = 1; i < favs.length; i++) {
+        await playTrackDirect(favs[i], false);
+    }
+};
+
+// --- History Management ---
+function getHistory() {
+    try {
+        return JSON.parse(localStorage.getItem('craftopia_history') || '[]');
+    } catch {
+        return [];
+    }
+}
+
+function addToHistory(track) {
+    if (!track || !track.title) return;
+    let hist = getHistory();
+    if (hist.length > 0 && hist[0].url === track.url) return;
+
+    const item = {
+        id: track.id || Date.now().toString(),
+        title: track.title,
+        artist: track.artist || 'Unknown Artist',
+        durationFormatted: track.durationFormatted || '0:00',
+        thumbnail: track.thumbnail || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&h=100&fit=crop',
+        url: track.url,
+        playedAt: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ' + new Date().toLocaleDateString('vi-VN')
+    };
+
+    hist = hist.filter(h => h.url !== track.url);
+    hist.unshift(item);
+    if (hist.length > 30) hist.pop();
+
+    localStorage.setItem('craftopia_history', JSON.stringify(hist));
+    updateHistoryBadge();
+    renderHistory();
+}
+
+function updateHistoryBadge() {
+    const count = getHistory().length;
+    const libHistCount = document.getElementById('lib-hist-tab-count');
+    if (libHistCount) libHistCount.textContent = count;
+}
+
+function renderHistory() {
+    const hist = getHistory();
+    const tbody = document.getElementById('history-tbody');
+    const btnClearHist = document.getElementById('btn-clear-history');
+    if (!tbody) return;
+
+    if (btnClearHist) {
+        btnClearHist.style.display = hist.length > 0 ? 'inline-flex' : 'none';
+    }
+
+    if (hist.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" style="text-align:center; padding: 48px;">
+                    <div class="empty-queue-art">
+                        <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                        <p style="margin-top:12px; font-weight:700; color:var(--text-secondary);">Lịch sử nghe nhạc đang trống</p>
+                        <span style="font-size:12.5px; color:var(--text-muted);">Những bài hát bạn nghe trên dashboard sẽ tự động lưu vào đây.</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = hist.map((t, idx) => `
+        <tr>
+            <td style="color:var(--text-muted); font-weight:700;">${idx + 1}</td>
+            <td>
+                <div class="track-row-title">
+                    <img src="${t.thumbnail}" alt="Thumb">
+                    <div>
+                        <div class="track-meta-title" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</div>
+                        <div class="track-meta-artist">${escapeHtml(t.artist)}</div>
+                    </div>
+                </div>
+            </td>
+            <td style="color:var(--text-muted); font-family:'JetBrains Mono', monospace;">${t.durationFormatted}</td>
+            <td style="color:var(--text-muted); font-size:12px;">${t.playedAt || 'Gần đây'}</td>
+            <td style="text-align: right;">
+                <div class="table-actions-row">
+                    <button class="btn-table-action play" onclick="playHistTrack(${idx}, true)" title="Phát lại ngay">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                    </button>
+                    <button class="btn-table-action" onclick="playHistTrack(${idx}, false)" title="Thêm vào hàng đợi">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                    </button>
+                    <button class="btn-table-action fav ${isFavorite(t.url) ? 'active' : ''}" onclick="toggleFavFromHistory(${idx})" title="Yêu thích">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+window.playHistTrack = async (idx, playNow = false) => {
+    const hist = getHistory();
+    const song = hist[idx];
+    if (song) await playTrackDirect(song, playNow);
+};
+
+window.toggleFavFromHistory = (idx) => {
+    const hist = getHistory();
+    const song = hist[idx];
+    if (song) {
+        toggleFavoriteTrack(song);
+        renderHistory();
+    }
+};
+
+function setupFavoritesAndHistory() {
+    updateFavoritesBadge();
+    updateHistoryBadge();
+    renderFavorites();
+    renderHistory();
+}
+
+function setupLibraryTabs() {
+    const tabBtnFav = document.getElementById('tab-btn-fav');
+    const tabBtnHist = document.getElementById('tab-btn-hist');
+    const subtabFav = document.getElementById('subtab-favorites');
+    const subtabHist = document.getElementById('subtab-history');
+    const btnClearHist = document.getElementById('btn-clear-history');
+    const libPlayAllBtn = document.getElementById('lib-play-all-btn');
+
+    if (tabBtnFav && tabBtnHist) {
+        tabBtnFav.addEventListener('click', () => {
+            tabBtnFav.classList.add('active');
+            tabBtnHist.classList.remove('active');
+            if (subtabFav) subtabFav.style.display = 'block';
+            if (subtabHist) subtabHist.style.display = 'none';
+            if (btnClearHist) btnClearHist.style.display = 'none';
+        });
+
+        tabBtnHist.addEventListener('click', () => {
+            tabBtnHist.classList.add('active');
+            tabBtnFav.classList.remove('active');
+            if (subtabFav) subtabFav.style.display = 'none';
+            if (subtabHist) subtabHist.style.display = 'block';
+            if (btnClearHist && getHistory().length > 0) btnClearHist.style.display = 'inline-flex';
+        });
+    }
+
+    if (btnClearHist) {
+        btnClearHist.addEventListener('click', () => {
+            if (confirm('Bạn có chắc chắn muốn xoá toàn bộ lịch sử nghe nhạc không?')) {
+                localStorage.removeItem('craftopia_history');
+                updateHistoryBadge();
+                renderHistory();
+                showToast('Đã xoá toàn bộ lịch sử nghe nhạc!', '🗑️');
+            }
+        });
+    }
+
+    if (libPlayAllBtn) {
+        libPlayAllBtn.addEventListener('click', window.playAllFavorites);
+    }
+}
+
+// ====================================================
+// NATIVE MOBILE FULLSCREEN PLAYER SHEET
+// ====================================================
+function setupMobilePlayerSheet() {
+    const sheet = document.getElementById('mobile-player-sheet');
+    const backdrop = document.getElementById('mobile-sheet-backdrop');
+    const btnMinimize = document.getElementById('btn-sheet-minimize');
+    const handle = document.getElementById('mobile-sheet-handle');
+    const sheetLyricsPreview = document.getElementById('mobile-sheet-lyrics-preview');
+
+    const openSheet = () => {
+        if (sheet) sheet.classList.add('active');
+    };
+    const closeSheet = () => {
+        if (sheet) sheet.classList.remove('active');
+    };
+
+    window.openMobilePlayerSheet = openSheet;
+    window.closeMobilePlayerSheet = closeSheet;
+
+    if (btnMinimize) btnMinimize.addEventListener('click', closeSheet);
+    if (backdrop) backdrop.addEventListener('click', closeSheet);
+
+    // Swipe down on handle to close
+    let startY = 0;
+    if (handle) {
+        handle.addEventListener('touchstart', (e) => {
+            startY = e.touches[0].clientY;
+        }, { passive: true });
+        handle.addEventListener('touchmove', (e) => {
+            const diff = e.touches[0].clientY - startY;
+            if (diff > 70) {
+                closeSheet();
+            }
+        }, { passive: true });
+    }
+
+    // Tapping lyrics preview in mobile sheet jumps directly to full Lyrics tab
+    if (sheetLyricsPreview) {
+        sheetLyricsPreview.addEventListener('click', () => {
+            closeSheet();
+            switchTab('tab-lyrics');
+        });
+    }
+
+    // Mobile Sheet Controls
+    const mobileBtnPlay = document.getElementById('mobile-sheet-btn-play');
+    const mobileBtnPrev = document.getElementById('mobile-sheet-btn-prev');
+    const mobileBtnNext = document.getElementById('mobile-sheet-btn-next');
+    const mobileBtnShuffle = document.getElementById('mobile-sheet-btn-shuffle');
+    const mobileBtnLoop = document.getElementById('mobile-sheet-btn-loop');
+    const mobileHeartBtn = document.getElementById('mobile-sheet-heart-btn');
+
+    if (mobileBtnPlay) mobileBtnPlay.addEventListener('click', () => sendControl('toggle'));
+    if (mobileBtnPrev) mobileBtnPrev.addEventListener('click', () => sendControl('previous'));
+    if (mobileBtnNext) mobileBtnNext.addEventListener('click', () => {
+        sendControl('skip');
+        showToast('Đã bỏ qua bài hát ⏭️', '⏭️');
+    });
+    if (mobileBtnShuffle) mobileBtnShuffle.addEventListener('click', () => {
+        sendControl('shuffle');
+        showToast('Đã xáo trộn danh sách 🔀', '🔀');
+    });
+    if (mobileBtnLoop) mobileBtnLoop.addEventListener('click', () => sendControl('loop'));
+    if (mobileHeartBtn) {
+        mobileHeartBtn.addEventListener('click', () => {
+            if (currentPlayerData?.currentTrack) {
+                toggleFavoriteTrack(currentPlayerData.currentTrack);
+            } else {
+                showToast('Chưa có bài hát đang phát!', '⚠️');
+            }
+        });
+    }
+
+    // Mobile touch seekbar
+    const mobileSeekSlider = document.getElementById('mobile-seek-slider');
+    const mobileSeekProg = document.getElementById('mobile-sheet-seek-prog');
+    const mobileSeekThumb = document.getElementById('mobile-sheet-seek-thumb');
+    const mobileTimeCur = document.getElementById('mobile-sheet-time-cur');
+
+    if (mobileSeekSlider) {
+        const handleSeek = (clientX) => {
+            const rect = mobileSeekSlider.getBoundingClientRect();
+            const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+            if (mobileSeekProg) mobileSeekProg.style.width = `${pct * 100}%`;
+            if (mobileSeekThumb) mobileSeekThumb.style.left = `${pct * 100}%`;
+            const sec = Math.floor(pct * currentDuration);
+            if (mobileTimeCur) mobileTimeCur.textContent = formatDuration(sec);
+            return sec;
+        };
+
+        mobileSeekSlider.addEventListener('click', (e) => {
+            const sec = handleSeek(e.clientX);
+            sendControl('seek', sec);
+        });
+
+        mobileSeekSlider.addEventListener('touchstart', (e) => {
+            isSeeking = true;
+            handleSeek(e.touches[0].clientX);
+            const onTouchMove = (moveEvent) => {
+                if (!isSeeking) return;
+                handleSeek(moveEvent.touches[0].clientX);
+            };
+            const onTouchEnd = (endEvent) => {
+                isSeeking = false;
+                document.removeEventListener('touchmove', onTouchMove);
+                document.removeEventListener('touchend', onTouchEnd);
+                const finalSec = handleSeek(endEvent.changedTouches[0].clientX);
+                sendControl('seek', finalSec);
+            };
+            document.addEventListener('touchmove', onTouchMove, { passive: true });
+            document.addEventListener('touchend', onTouchEnd, { passive: true });
+        }, { passive: true });
+    }
+}
+
+// ====================================================
+// REALTIME AUDIO SPECTRUM CANVAS VISUALIZERS
+// ====================================================
+function setupCanvasVisualizers() {
+    const playerCanvas = document.getElementById('player-canvas-vis');
+    const mobileCanvas = document.getElementById('mobile-sheet-vis');
+
+    const bars = 14;
+    const barValues = new Array(bars).fill(2);
+
+    function renderFrame() {
+        requestAnimationFrame(renderFrame);
+
+        for (let i = 0; i < bars; i++) {
+            if (isTrackPlaying) {
+                const target = 3 + Math.random() * 20;
+                barValues[i] += (target - barValues[i]) * 0.35;
+            } else {
+                barValues[i] += (2 - barValues[i]) * 0.15;
+            }
+        }
+
+        drawToCanvas(playerCanvas);
+        drawToCanvas(mobileCanvas);
+    }
+
+    function drawToCanvas(canvas) {
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        const gap = 2;
+        const barW = (w - (bars - 1) * gap) / bars;
+
+        for (let i = 0; i < bars; i++) {
+            const barH = Math.min(h, Math.max(2, (barValues[i] / 24) * h));
+            const x = i * (barW + gap);
+            const y = h - barH;
+
+            const grad = ctx.createLinearGradient(0, y, 0, h);
+            grad.addColorStop(0, '#06b6d4');
+            grad.addColorStop(1, '#10b981');
+            ctx.fillStyle = grad;
+
+            ctx.beginPath();
+            const radius = Math.min(barW / 2, 2);
+            if (ctx.roundRect) {
+                ctx.roundRect(x, y, barW, barH, radius);
+            } else {
+                ctx.rect(x, y, barW, barH);
+            }
+            ctx.fill();
+        }
+    }
+
+    requestAnimationFrame(renderFrame);
 }

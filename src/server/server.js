@@ -296,7 +296,7 @@ class WebServer {
 
             const guildId = req.params.id;
             const userId = req.session.user.id;
-            const { query, trackData } = req.body;
+            const { query, trackData, playNow } = req.body;
 
             const guild = bot.client ? bot.client.guilds.cache.get(guildId) : null;
             if (!guild) return res.status(404).json({ error: 'Server không tìm thấy trên bot!' });
@@ -355,7 +355,8 @@ class WebServer {
                     trackData || query,
                     user,
                     null,
-                    chosenBot
+                    chosenBot,
+                    Boolean(playNow)
                 );
                 res.json({
                     success: true,
@@ -432,6 +433,14 @@ class WebServer {
                     break;
                 case 'remove':
                     player.removeTrack(parseInt(value, 10));
+                    break;
+                case 'jump':
+                    player.jumpTo(parseInt(value, 10));
+                    break;
+                case 'move':
+                    if (value && typeof value.from === 'number' && typeof value.to === 'number') {
+                        player.moveTrack(value.from, value.to);
+                    }
                     break;
                 default:
                     return res.status(400).json({ error: 'Hành động không hợp lệ!' });

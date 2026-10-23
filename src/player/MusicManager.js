@@ -319,6 +319,26 @@ class GuildPlayer extends EventEmitter {
         return null;
     }
 
+    jumpTo(index) {
+        if (index >= 0 && index < this.queue.length) {
+            const target = this.queue.splice(index, 1)[0];
+            this.queue.unshift(target);
+            this.skip();
+            return true;
+        }
+        return false;
+    }
+
+    moveTrack(fromIndex, toIndex) {
+        if (fromIndex >= 0 && fromIndex < this.queue.length && toIndex >= 0 && toIndex < this.queue.length) {
+            const [item] = this.queue.splice(fromIndex, 1);
+            this.queue.splice(toIndex, 0, item);
+            this.manager.emitUpdate(this.guildId, this);
+            return true;
+        }
+        return false;
+    }
+
     destroy() {
         this.queue = [];
         this.currentTrack = null;
@@ -511,7 +531,7 @@ class MusicManager extends EventEmitter {
         return `${m}:${s < 10 ? '0' : ''}${s}`;
     }
 
-    async enqueue(guildId, voiceChannel, query, requestedBy, textChannelId = null, botClient = null) {
+    async enqueue(guildId, voiceChannel, query, requestedBy, textChannelId = null, botClient = null, playNow = false) {
         let player = null;
         if (botClient && botClient.user) {
             player = this.getOrCreatePlayer(guildId, botClient, voiceChannel.id);
@@ -547,6 +567,10 @@ class MusicManager extends EventEmitter {
         if (!player.currentTrack) {
             await player.playTrack(track);
             return { type: 'playing', track, player };
+        } else if (playNow) {
+            player.queue.unshift(track);
+            player.skip();
+            return { type: 'playing_now', track, player };
         } else {
             player.queue.push(track);
             this.emitUpdate(guildId, player);

@@ -54,6 +54,11 @@
                     <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><line x1="9" y1="9" x2="15" y2="9"></line><line x1="9" y1="13" x2="13" y2="13"></line></svg>
                     <span>Lời bài hát (Lyrics)</span>
                 </li>
+                <li class="nav-item" data-tab="tab-library">
+                    <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                    <span>Thư viện & Yêu thích</span>
+                    <span class="nav-badge" id="sidebar-fav-count">0</span>
+                </li>
             </ul>
 
             <!-- Server Library Section -->
@@ -122,6 +127,11 @@
                         </svg>
                         <input type="text" id="top-search-input" placeholder="Tìm kiếm bài hát, ca sĩ, link..." autocomplete="off">
                         <div class="search-key-hint">Enter ↵</div>
+                    </div>
+                    <div class="url-detect-pill" id="url-detect-pill" style="display:none;" title="Click để phát ngay link YouTube">
+                        <span class="url-detect-pulse"></span>
+                        <span class="url-detect-text">🔗 Nhận diện link YouTube</span>
+                        <button class="btn-pill-xs" id="btn-play-detected-url">Phát ngay ▶️</button>
                     </div>
                 </div>
 
@@ -454,6 +464,86 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- TAB 5: THƯ VIỆN & YÊU THÍCH (LIBRARY & FAVORITES) -->
+                <div class="tab-view" id="tab-library">
+                    <div class="library-header-banner">
+                        <div class="lib-banner-icon">
+                            <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                        </div>
+                        <div class="lib-banner-info">
+                            <span class="lib-banner-tag">BỘ SƯU TẬP CỦA BẠN</span>
+                            <h1 class="lib-banner-title">Thư Viện Cá Nhân</h1>
+                            <p class="lib-banner-sub" id="lib-banner-desc">Lưu trữ các bài hát yêu thích & lịch sử nghe nhạc của bạn trên thiết bị này</p>
+                            <div class="lib-banner-actions">
+                                <button class="btn-pill btn-pill-accent" id="lib-play-all-btn" title="Phát tất cả bài yêu thích">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                                    <span>Phát tất cả yêu thích</span>
+                                </button>
+                                <button class="btn-pill" onclick="switchTab('tab-search')">
+                                    <span>🔍 Khám phá thêm</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="lib-tabs-nav">
+                        <div class="lib-tabs-group">
+                            <button class="lib-tab-btn active" id="tab-btn-fav" data-subtab="subtab-favorites">
+                                <span>❤️ Bài hát yêu thích</span>
+                                <span class="lib-tab-count" id="lib-fav-tab-count">0</span>
+                            </button>
+                            <button class="lib-tab-btn" id="tab-btn-hist" data-subtab="subtab-history">
+                                <span>🕒 Lịch sử phát gần đây</span>
+                                <span class="lib-tab-count" id="lib-hist-tab-count">0</span>
+                            </button>
+                        </div>
+                        <button class="btn-pill btn-pill-danger" id="btn-clear-history" style="display:none;">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                            <span>Xoá lịch sử</span>
+                        </button>
+                    </div>
+
+                    <!-- Sub-tab 1: Favorites -->
+                    <div class="subtab-content active" id="subtab-favorites">
+                        <div class="table-container" style="margin-top:16px;">
+                            <table class="spotify-table" id="fav-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50px;">#</th>
+                                        <th>Bài hát & Nghệ sĩ</th>
+                                        <th>Thời lượng</th>
+                                        <th>Đã lưu</th>
+                                        <th style="text-align: right;">Hành động</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="favorites-tbody">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Sub-tab 2: History -->
+                    <div class="subtab-content" id="subtab-history" style="display:none;">
+                        <div class="table-container" style="margin-top:16px;">
+                            <table class="spotify-table" id="hist-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50px;">#</th>
+                                        <th>Bài hát & Nghệ sĩ</th>
+                                        <th>Thời lượng</th>
+                                        <th>Thời gian phát</th>
+                                        <th style="text-align: right;">Hành động</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="history-tbody">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
         </main>
     </div>
@@ -473,9 +563,7 @@
                 <div class="player-title" id="bar-title">Chưa phát nhạc</div>
                 <div class="player-artist" id="bar-artist">Craftopia Music Studio</div>
             </div>
-            <div class="player-mini-waveform" id="player-mini-waveform">
-                <span></span><span></span><span></span><span></span><span></span>
-            </div>
+            <canvas class="player-canvas-vis" id="player-canvas-vis" width="60" height="24" title="Audio Spectrum Visualizer"></canvas>
             <button class="player-heart" id="bar-heart-btn" title="Yêu thích">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
             </button>
@@ -573,6 +661,10 @@
             <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><line x1="9" y1="9" x2="15" y2="9"></line><line x1="9" y1="13" x2="13" y2="13"></line></svg>
             <span>Lời bài hát</span>
         </button>
+        <button class="mobile-nav-item" data-tab="tab-library">
+            <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+            <span>Thư viện</span>
+        </button>
         <button class="mobile-nav-item" data-tab="tab-queue">
             <div class="mobile-badge-wrap">
                 <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
@@ -585,6 +677,89 @@
             <span>Phòng Voice</span>
         </button>
     </nav>
+
+    <!-- NATIVE MOBILE FULLSCREEN NOW PLAYING DRAWER / SHEET -->
+    <div class="mobile-player-sheet" id="mobile-player-sheet">
+        <div class="mobile-sheet-backdrop" id="mobile-sheet-backdrop"></div>
+        <div class="mobile-sheet-container">
+            <!-- Pull/drag indicator -->
+            <div class="mobile-sheet-handle-wrap" id="mobile-sheet-handle">
+                <div class="sheet-drag-pill"></div>
+            </div>
+
+            <!-- Top bar -->
+            <div class="mobile-sheet-topbar">
+                <button class="sheet-icon-btn" id="btn-sheet-minimize" title="Thu nhỏ">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+                <div class="mobile-sheet-channel-badge">
+                    <span class="sheet-channel-dot"></span>
+                    <span id="mobile-sheet-voice-name">🔊 Chưa kết nối</span>
+                </div>
+                <button class="sheet-icon-btn" id="mobile-sheet-heart-btn" title="Yêu thích">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                </button>
+            </div>
+
+            <!-- Cover art with glow -->
+            <div class="mobile-sheet-art-wrap">
+                <img class="mobile-sheet-art" id="mobile-sheet-art" src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&h=500&fit=crop" alt="Artwork">
+                <div class="mobile-sheet-art-glow" id="mobile-sheet-art-glow"></div>
+            </div>
+
+            <!-- Title & Artist & Mini visualizer -->
+            <div class="mobile-sheet-info-row">
+                <div class="mobile-sheet-info">
+                    <div class="mobile-sheet-title" id="mobile-sheet-title">Chưa phát nhạc</div>
+                    <div class="mobile-sheet-artist" id="mobile-sheet-artist">Craftopia Music Studio</div>
+                </div>
+                <canvas id="mobile-sheet-vis" width="48" height="20"></canvas>
+            </div>
+
+            <!-- Synced Lyrics Snippet Card (Click to open full Lyrics tab) -->
+            <div class="mobile-sheet-lyrics-preview" id="mobile-sheet-lyrics-preview" title="Bấm để mở toàn bộ Lời bài hát Karaoke">
+                <div class="mobile-lyrics-header-row">
+                    <span class="mobile-lyrics-tag">🎤 LỜI BÀI HÁT KARAOKE</span>
+                    <span class="mobile-lyrics-arrow">Xem toàn bộ ↗</span>
+                </div>
+                <div class="mobile-lyrics-cur-line" id="mobile-cur-lyric">Đang chờ bài hát...</div>
+                <div class="mobile-lyrics-next-line" id="mobile-next-lyric">...</div>
+            </div>
+
+            <!-- Seekbar -->
+            <div class="mobile-sheet-seek-box">
+                <div class="slider-container" id="mobile-seek-slider">
+                    <div class="slider-track">
+                        <div class="slider-progress" id="mobile-sheet-seek-prog"></div>
+                    </div>
+                    <div class="slider-thumb" id="mobile-sheet-seek-thumb"></div>
+                </div>
+                <div class="mobile-seek-times">
+                    <span id="mobile-sheet-time-cur">0:00</span>
+                    <span id="mobile-sheet-time-tot">0:00</span>
+                </div>
+            </div>
+
+            <!-- Touch Controls -->
+            <div class="mobile-sheet-controls-grid">
+                <button class="sheet-ctrl-btn" id="mobile-sheet-btn-shuffle" title="Xáo trộn">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+                </button>
+                <button class="sheet-ctrl-btn" id="mobile-sheet-btn-prev" title="Bài trước">
+                    <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+                </button>
+                <button class="sheet-play-circle" id="mobile-sheet-btn-play" title="Phát / Tạm dừng">
+                    <svg viewBox="0 0 24 24" id="mobile-sheet-play-icon"><path d="M8 5v14l11-7z"/></svg>
+                </button>
+                <button class="sheet-ctrl-btn" id="mobile-sheet-btn-next" title="Bài kế tiếp">
+                    <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+                </button>
+                <button class="sheet-ctrl-btn" id="mobile-sheet-btn-loop" title="Chế độ lặp">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- THEATER / FULLSCREEN IMMERSIVE OVERLAY -->
     <div class="theater-overlay" id="theater-modal">
@@ -799,6 +974,6 @@
 
     <!-- Scripts -->
     <script src="/socket.io/socket.io.js"></script>
-    <script src="js/app.js?v=2.4.0"></script>
+    <script src="js/app.js?v=2.5.0"></script>
 </body>
 </html>
