@@ -42,6 +42,9 @@ const btnModalCancel = document.getElementById('btn-modal-cancel');
 const btnModalConnect = document.getElementById('btn-modal-connect');
 
 // Hero Showcase & Vinyl
+const heroBanner = document.getElementById('hero-banner');
+const heroIdleView = document.getElementById('hero-idle-view');
+const heroPlayingView = document.getElementById('hero-playing-view');
 const heroArt = document.getElementById('hero-art');
 const heroTitle = document.getElementById('hero-title');
 const heroArtist = document.getElementById('hero-artist');
@@ -774,6 +777,13 @@ function updatePlayerUI(player) {
 
     // Track Info
     if (track) {
+        if (heroBanner) {
+            heroBanner.classList.add('is-playing');
+            heroBanner.classList.remove('is-idle');
+        }
+        if (heroIdleView) heroIdleView.style.display = 'none';
+        if (heroPlayingView) heroPlayingView.style.display = 'flex';
+
         currentDuration = track.durationSeconds || 0;
         currentSeconds = player.currentSeconds || 0;
 
@@ -816,6 +826,13 @@ function updatePlayerUI(player) {
         // Update Lyrics View
         updateLyricsView(track, player);
     } else {
+        if (heroBanner) {
+            heroBanner.classList.add('is-idle');
+            heroBanner.classList.remove('is-playing');
+        }
+        if (heroIdleView) heroIdleView.style.display = 'flex';
+        if (heroPlayingView) heroPlayingView.style.display = 'none';
+
         if (heroBgArt) heroBgArt.style.backgroundImage = 'none';
         heroTitle.textContent = 'Chưa có bài hát nào đang phát';
         heroArtist.textContent = 'Khám phá danh sách bài hát hot bên dưới hoặc gõ lệnh /play trên Discord để quẩy nhạc!';

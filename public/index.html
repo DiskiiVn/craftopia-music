@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/spotify.css">
+    <link rel="stylesheet" href="css/spotify.css?v=3.0.0">
 </head>
 <body>
     <!-- Background Ambient Glows -->
@@ -166,61 +166,134 @@
             <div class="content-body">
                 <!-- TAB 1: HOME / NOW PLAYING -->
                 <div class="tab-view active" id="tab-home">
-                    <!-- Hero Showcase Banner with Vinyl Record Effect -->
-                    <div class="hero-canvas" id="hero-banner">
+                    <!-- Hero Showcase Banner with Dual-State (Idle Studio Pad vs Playing Turntable) -->
+                    <div class="hero-canvas is-idle" id="hero-banner">
                         <div class="hero-bg-art" id="hero-bg-art"></div>
                         <div class="hero-mesh-overlay"></div>
 
-                        <div class="vinyl-container">
-                            <div class="vinyl-disc" id="vinyl-disc">
-                                <div class="vinyl-shine"></div>
-                                <div class="vinyl-center-label">
-                                    <div class="vinyl-center-hole"></div>
+                        <!-- STATE 1: IDLE / WELCOME STUDIO SHOWCASE -->
+                        <div class="hero-idle-container" id="hero-idle-view">
+                            <div class="hero-idle-content">
+                                <div class="hero-tag-row">
+                                    <div class="hero-tag">
+                                        <div class="visualizer mini">
+                                            <div class="bar"></div>
+                                            <div class="bar"></div>
+                                            <div class="bar"></div>
+                                            <div class="bar"></div>
+                                        </div>
+                                        <span>CRAFTOPIA STUDIO AUDIO ENGINE</span>
+                                    </div>
+                                    <span class="badge-tech glow">320 KBPS HD LOSSLESS</span>
+                                    <span class="badge-tech">MULTI-BOT CLUSTER</span>
+                                </div>
+
+                                <h1 class="hero-idle-title">Không Gian Âm Nhạc Trực Tuyến Đẳng Cấp</h1>
+                                <p class="hero-idle-desc">Hệ thống phát nhạc chuẩn phòng thu cho Discord của bạn. Chọn ngay tuyển tập âm nhạc yêu thích hoặc nhập từ khóa để bot tham gia quẩy nhạc cùng bạn bè!</p>
+
+                                <div class="hero-quick-pills">
+                                    <button class="quick-pill pill-vpop" onclick="playTrendingPlaylist('Top Vietnamese Hits 2026')">
+                                        <span class="pill-icon">🇻🇳</span>
+                                        <span class="pill-label">V-Pop Hot 2026</span>
+                                        <span class="pill-action">Phát ngay ▶</span>
+                                    </button>
+                                    <button class="quick-pill pill-lofi" onclick="playTrendingPlaylist('Lofi chillhop beats to relax study')">
+                                        <span class="pill-icon">☕</span>
+                                        <span class="pill-label">Midnight Lofi Chill</span>
+                                        <span class="pill-action">Phát ngay ▶</span>
+                                    </button>
+                                    <button class="quick-pill pill-gaming" onclick="playTrendingPlaylist('Gaming NCS Best Mix Bass Boosted')">
+                                        <span class="pill-icon">🎮</span>
+                                        <span class="pill-label">Gaming NCS Bass</span>
+                                        <span class="pill-action">Phát ngay ▶</span>
+                                    </button>
+                                    <button class="quick-pill pill-edm" onclick="playTrendingPlaylist('EDM Ultra Festival Remix 2026')">
+                                        <span class="pill-icon">⚡</span>
+                                        <span class="pill-label">EDM Festival Ultra</span>
+                                        <span class="pill-action">Phát ngay ▶</span>
+                                    </button>
+                                    <button class="quick-pill pill-bots" onclick="switchTab('tab-bots')">
+                                        <span class="pill-icon">🤖</span>
+                                        <span class="pill-label">Mời Bot Vào Server</span>
+                                        <span class="pill-action">Khám phá →</span>
+                                    </button>
                                 </div>
                             </div>
-                            <div class="hero-art-wrapper">
-                                <img class="hero-art" id="hero-art" src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&h=500&fit=crop" alt="Artwork">
-                                <div class="art-overlay-glass"></div>
+
+                            <div class="hero-idle-art-side">
+                                <div class="idle-art-glow"></div>
+                                <div class="idle-audio-core">
+                                    <div class="idle-core-pulse"></div>
+                                    <div class="idle-core-ring ring-1"></div>
+                                    <div class="idle-core-ring ring-2"></div>
+                                    <div class="idle-core-center">
+                                        <svg viewBox="0 0 24 24" width="36" height="36" fill="currentColor">
+                                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                                            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                                        </svg>
+                                    </div>
+                                </div>
+                                <div class="idle-core-specs">
+                                    <span>● Sẵn sàng kết nối</span>
+                                    <span>• 32-bit Floating Audio</span>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="hero-info">
-                            <div class="hero-tag-row">
-                                <div class="hero-tag">
-                                    <div class="visualizer" id="hero-visualizer">
-                                        <div class="bar"></div>
-                                        <div class="bar"></div>
-                                        <div class="bar"></div>
-                                        <div class="bar"></div>
-                                        <div class="bar"></div>
-                                        <div class="bar"></div>
-                                        <div class="bar"></div>
-                                        <div class="bar"></div>
+                        <!-- STATE 2: PLAYING / VINYL RECORD STUDIO -->
+                        <div class="hero-playing-container" id="hero-playing-view" style="display:none;">
+                            <div class="vinyl-container">
+                                <div class="vinyl-disc" id="vinyl-disc">
+                                    <div class="vinyl-shine"></div>
+                                    <div class="vinyl-center-label">
+                                        <div class="vinyl-center-hole"></div>
                                     </div>
-                                    <span id="hero-status-label">CRAFTOPIA MUSIC STUDIO</span>
                                 </div>
-                                <span class="badge-tech glow">320 KBPS HD AUDIO</span>
-                                <span class="badge-tech">LOSSLESS STEREO</span>
+                                <div class="hero-art-wrapper">
+                                    <img class="hero-art" id="hero-art" src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&h=500&fit=crop" alt="Artwork">
+                                    <div class="art-overlay-glass"></div>
+                                </div>
                             </div>
 
-                            <h1 class="hero-title" id="hero-title">Chưa có bài hát nào đang phát</h1>
-                            <div class="hero-artist" id="hero-artist">Khám phá danh sách bài hát hot bên dưới hoặc gõ lệnh /play trên Discord để quẩy nhạc!</div>
-                            <div class="hero-meta" id="hero-meta">Yêu cầu bởi: Dashboard • Sẵn sàng kết nối kênh thoại</div>
+                            <div class="hero-info">
+                                <div class="hero-tag-row">
+                                    <div class="hero-tag">
+                                        <div class="visualizer" id="hero-visualizer">
+                                            <div class="bar"></div>
+                                            <div class="bar"></div>
+                                            <div class="bar"></div>
+                                            <div class="bar"></div>
+                                            <div class="bar"></div>
+                                            <div class="bar"></div>
+                                            <div class="bar"></div>
+                                            <div class="bar"></div>
+                                        </div>
+                                        <span id="hero-status-label">CRAFTOPIA MUSIC STUDIO</span>
+                                    </div>
+                                    <span class="badge-tech glow">320 KBPS HD AUDIO</span>
+                                    <span class="badge-tech">LOSSLESS STEREO</span>
+                                </div>
 
-                            <div class="hero-actions">
-                                <button class="btn-hero-play" id="hero-play-btn" title="Phát / Tạm dừng">
-                                    <svg viewBox="0 0 24 24" id="hero-play-icon"><path d="M8 5v14l11-7z"/></svg>
-                                </button>
-                                <button class="btn-pill btn-pill-accent" id="hero-skip-btn">
-                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
-                                    <span>Bỏ qua bài (Next)</span>
-                                </button>
-                                <button class="btn-pill" id="hero-theater-btn">
-                                    <span>✨ Toàn màn hình</span>
-                                </button>
-                                <button class="btn-pill" id="hero-search-shortcut">
-                                    <span>🔍 Khám phá bài mới</span>
-                                </button>
+                                <h1 class="hero-title" id="hero-title">Chưa có bài hát nào đang phát</h1>
+                                <div class="hero-artist" id="hero-artist">Khám phá danh sách bài hát hot bên dưới hoặc gõ lệnh /play trên Discord để quẩy nhạc!</div>
+                                <div class="hero-meta" id="hero-meta">Yêu cầu bởi: Dashboard • Sẵn sàng kết nối kênh thoại</div>
+
+                                <div class="hero-actions">
+                                    <button class="btn-hero-play" id="hero-play-btn" title="Phát / Tạm dừng">
+                                        <svg viewBox="0 0 24 24" id="hero-play-icon"><path d="M8 5v14l11-7z"/></svg>
+                                    </button>
+                                    <button class="btn-pill btn-pill-accent" id="hero-skip-btn">
+                                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+                                        <span>Bỏ qua bài (Next)</span>
+                                    </button>
+                                    <button class="btn-pill" id="hero-theater-btn">
+                                        <span>✨ Toàn màn hình</span>
+                                    </button>
+                                    <button class="btn-pill" id="hero-search-shortcut">
+                                        <span>🔍 Khám phá bài mới</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1077,6 +1150,6 @@
 
     <!-- Scripts -->
     <script src="/socket.io/socket.io.js"></script>
-    <script src="js/app.js?v=2.6.0"></script>
+    <script src="js/app.js?v=3.0.0"></script>
 </body>
 </html>
